@@ -11,11 +11,13 @@ from .replay import replay
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
+    inputs = parser.add_mutually_exclusive_group()
+    inputs.add_argument(
         "--task",
         type=Path,
         help="Task JSON; optional for replay, which uses its saved task",
     )
+    inputs.add_argument("--request", help="Inline coding request instead of Task JSON")
     modes = parser.add_mutually_exclusive_group(required=True)
     modes.add_argument(
         "--live", action="store_true", help="Call Decisions once using OPENAI_API_KEY"
@@ -45,41 +47,33 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
         "--trace-out", type=Path, help="Save the credential-free trace locally"
     )
     parser.add_argument(
-        "--json", action="store_true", help="Print one machine-readable JSON object"
+        "--trace",
+        "--json",
+        dest="full_trace",
+        action="store_true",
+        help="Print full RoutingTrace JSON (default: plan JSON)",
     )
 
 
-def _print_trace(routing_trace: RoutingTrace, *, as_json: bool) -> None:
-    """Render a trace without mixing presentation with routing and file I/O."""
-    data = routing_trace.to_dict()
-    if as_json:
-        print(json.dumps(data, indent=2))
-        return
-    print(
-        f"SOURCE: {routing_trace.source.upper()} "
-        f"| live request sent: {routing_trace.request_sent}"
-    )
-    if routing_trace.source == "simulated":
-        print(
-            "SIMULATED EXAMPLE: probabilities are invented; "
-            "no API usage or savings measured."
-        )
-    for title, content in (
-        ("REQUEST BODY", routing_trace.request),
-        ("RAW RESPONSE", routing_trace.response),
-        ("PLAN ASSEMBLED BY CODE", data["plan"]),
-    ):
-        print(f"\n{title}\n{json.dumps(content, indent=2)}")
-    print(
-        f"\nPolicy: {routing_trace.policy.version} (uncalibrated starting thresholds)"
-    )
+def _print_result(routing_trace: RoutingTrace, *, full_trace: bool) -> None:
+    """Keep stdout as one JSON object and send call diagnostics to stderr."""
+    result = routing_trace if full_trace else routing_trace.plan
+    print(result.model_dump_json(indent=2))
     if routing_trace.error:
-        print(f"Call error: {routing_trace.error}")
+        print(f"model-router: {routing_trace.error}", file=sys.stderr)
+
+
+def _load_task(options: argparse.Namespace) -> Task | None:
+    if options.request is not None:
+        return Task(request=options.request)
+    if options.task:
+        return Task.model_validate_json(options.task.read_text())
+    return None
 
 
 def _route_from_options(task: Task | None, options: argparse.Namespace) -> RoutingTrace:
     if task is None:
-        raise ValueError("--task is required for --live and --simulate")
+        raise ValueError("--task is required unless --request is supplied")
     if options.simulate:
         response = json.loads(options.simulate.read_text())
         return route(task, send=lambda _request: response, source="simulated")
@@ -90,19 +84,16 @@ def _route_from_options(task: Task | None, options: argparse.Namespace) -> Routi
 
 
 def execute(options: argparse.Namespace) -> int:
-    task_path = options.task
     request_only = options.request_only
     replay_path = options.replay
     trace_path = options.trace_out
-    as_json = options.json
+    full_trace = options.full_trace
 
     try:
-        coding_task = (
-            Task.model_validate_json(task_path.read_text()) if task_path else None
-        )
+        coding_task = _load_task(options)
         if request_only:
             if coding_task is None:
-                raise ValueError("--task is required for --request-only")
+                raise ValueError("--task is required unless --request is supplied")
             print(json.dumps(build_request(coding_task), indent=2))
             return 0
         if replay_path:
@@ -114,7 +105,7 @@ def execute(options: argparse.Namespace) -> int:
         if trace_path:
             trace_path.parent.mkdir(parents=True, exist_ok=True)
             trace_path.write_text(json.dumps(routing_trace.to_dict(), indent=2) + "\n")
-        _print_trace(routing_trace, as_json=as_json)
+        _print_result(routing_trace, full_trace=full_trace)
         return 2 if routing_trace.plan.status == "needs_review" else 0
     except (OSError, ValueError, TypeError) as error:
         print(f"model-router: {error}", file=sys.stderr)

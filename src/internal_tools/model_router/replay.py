@@ -50,8 +50,8 @@ def replay(
     original_task = _saved_task(request)
     if task is not None and request != _json_request(task):
         raise ValueError(
-            "saved request differs from --task or current routing questions. "
-            "Omit --task to replay the original saved request and response. "
+            "saved request differs from supplied task or current routing questions. "
+            "Omit --task/--request to replay the original saved request and response. "
             "No API call was made."
         )
     policy = policy or RoutingPolicy()

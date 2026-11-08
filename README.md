@@ -37,20 +37,26 @@ Choose **one** mode:
 
 | Mode | Task required? | API calls | Output |
 | --- | --- | --- | --- |
-| `--request-only` | `--task FILE` | 0 | Request body JSON |
-| `--live` | `--task FILE` | 0–1 | RoutingTrace |
-| `--simulate RESPONSE.json` | `--task FILE` | 0 | RoutingTrace, source `simulated` |
-| `--replay TRACE.json` | Optional | 0 | RoutingTrace, source `replay` |
+| `--request-only` | `--request TEXT` or `--task FILE` | 0 | Request body JSON |
+| `--live` | `--request TEXT` or `--task FILE` | 0–1 | Plan JSON |
+| `--simulate RESPONSE.json` | `--request TEXT` or `--task FILE` | 0 | Plan JSON |
+| `--replay TRACE.json` | Optional | 0 | Plan JSON |
 
 | Option | Behavior |
 | --- | --- |
+| `--request TEXT` | Inline request. Mutually exclusive with `--task`. |
 | `--task FILE` | Read Task JSON. With replay, require a match to the saved request. |
-| `--json` | Print RoutingTrace JSON instead of labeled text sections. |
+| `--trace` | Print full RoutingTrace JSON instead of Plan JSON. |
+| `--json` | Compatibility alias for `--trace`. |
 | `--trace-out FILE` | Save RoutingTrace JSON; ignored in request-only mode. |
 | `--env-file FILE` | Live only; default `.env`. Existing environment values win. |
 | `--help` | List arguments. |
 
-Live uses `OPENAI_API_KEY`. Replay uses saved evidence and questions, with current policy.
+Live uses `OPENAI_API_KEY`. Replay uses saved evidence and questions, with current policy. Stdout contains one JSON object; errors go to stderr.
+
+```sh
+uv run --no-editable internal-tools model-router --live --request "Fix parse_numbers('') raising ValueError; empty input should return []."
+```
 
 ## Input schema: Task
 

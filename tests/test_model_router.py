@@ -365,7 +365,7 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(json.loads(stdout.getvalue())["model"], "gpt-6-luna")
 
-    def test_cli_human_simulation_output(self):
+    def test_cli_default_simulation_outputs_only_plan(self):
         with patch("sys.stdout", new_callable=io.StringIO) as stdout:
             exit_code = main(
                 [
@@ -376,20 +376,14 @@ class RouterTests(unittest.TestCase):
                 ]
             )
         self.assertEqual(exit_code, 0)
-        output = stdout.getvalue()
-        self.assertIn("SOURCE: SIMULATED | live request sent: False", output)
-        self.assertIn("SIMULATED EXAMPLE:", output)
-        for title in (
-            "REQUEST BODY",
-            "RAW RESPONSE",
-            "PLAN ASSEMBLED BY CODE",
-            "Policy:",
-        ):
-            self.assertIn(title, output)
+        output = json.loads(stdout.getvalue())
+        expected = self.assemble_fixture_plan().model_dump(mode="json")
+        self.assertEqual(output, expected)
 
-    def test_cli_human_error_output(self):
+    def test_cli_error_keeps_plan_on_stdout_and_diagnostic_on_stderr(self):
         with (
             patch("sys.stdout", new_callable=io.StringIO) as stdout,
+            patch("sys.stderr", new_callable=io.StringIO) as stderr,
             patch(
                 "internal_tools.model_router.provider.send_decision",
                 side_effect=router.DecisionCallError(
@@ -407,10 +401,10 @@ class RouterTests(unittest.TestCase):
                 ]
             )
         self.assertEqual(exit_code, 2)
-        output = stdout.getvalue()
-        self.assertIn("SOURCE: LIVE | live request sent: True", output)
-        self.assertIn("Call error: APITimeoutError", output)
-        self.assertNotIn("SIMULATED EXAMPLE:", output)
+        output = json.loads(stdout.getvalue())
+        self.assertEqual(output["status"], "needs_review")
+        self.assertNotIn("response", output)
+        self.assertIn("model-router: APITimeoutError", stderr.getvalue())
 
     def test_no_credentials_returns_configuration_error_without_claiming_request(self):
         with patch.dict(os.environ, {}, clear=True):
