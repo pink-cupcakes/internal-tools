@@ -1,0 +1,15 @@
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.4
+    hooks:
+      - id: ruff-check
+        name: Check code complexity and lint
+  - repo: local
+    hooks:
+      - id: function-length
+        name: Check function length (maximum 50 lines)
+        entry: uv run --locked --no-editable python scripts/check_function_length.py
+        language: system
+        types: [python]
+        exclude: ^(build|dist|\.venv)/
+        require_serial: true

@@ -1,0 +1,18 @@
+{
+  "model": "gpt-6-luna",
+  "answers": [
+    {
+      "type": "choice",
+      "name": "workflow",
+      "choice": "fix",
+      "probabilities": [
+        {"value": "explain", "probability": 0.01},
+        {"value": "fix", "probability": 0.96},
+        {"value": "implement", "probability": 0.02},
+        {"value": "clarify", "probability": 0.01}
+      ],
+      "confidence": 0.93
+    },
+    {"type": "predicate", "name": "needs_strong_model", "probability": 0.08}
+  ]
+}

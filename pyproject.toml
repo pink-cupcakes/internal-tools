@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "internal-tools"
+version = "0.1.0"
+description = "Reusable internal tools, starting with a coding model router."
+requires-python = ">=3.11"
+dependencies = [
+    "openai>=3.46.0",
+    "pydantic>=2,<3",
+    "python-dotenv>=1.2.4",
+]
+
+[project.scripts]
+internal-tools = "internal_tools.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+
+[tool.ruff.lint]
+# Keep the baseline explicit so upgrades do not silently broaden this gate.
+select = ["E4", "E7", "E9", "E501", "F", "C901", "RUF100"]
+
+[tool.ruff.lint.mccabe]
+# Keep each function's control flow small enough to understand and test.
+max-complexity = 10
+
+[tool.function-length]
+max-lines = 50
+paths = ["src", "tests", "examples", "scripts"]
+
+[dependency-groups]
+dev = [
+    "pre-commit>=4.7.0",
+    "ruff>=0.17.4",
+]

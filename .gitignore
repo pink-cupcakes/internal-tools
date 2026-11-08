@@ -1,0 +1,16 @@
+# Local planning and learning materials
+/README.md
+/docs/model-router/
+
+# Python build and local environment artifacts
+__pycache__/
+*.egg-info/
+/build/
+/dist/
+/.venv/
+.ruff_cache/
+
+# Local API credentials
+.env
+.env.*
+!.env.example

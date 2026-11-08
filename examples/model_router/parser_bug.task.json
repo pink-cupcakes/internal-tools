@@ -1,0 +1,25 @@
+{
+  "request": "Fix parse_numbers so empty or whitespace-only input returns [], preserving existing behavior for nonempty comma-separated integers and invalid fields.",
+  "evidence": [
+    {
+      "ref": "examples/model_router/parser_bug/parser.py:parse_numbers",
+      "content": "\"\"\"Intentionally broken example input, not production router code.\"\"\"\n\n\ndef parse_numbers(text: str) -> list[int]:\n    return [int(field.strip()) for field in text.split(\",\")]\n"
+    },
+    {
+      "ref": "examples/model_router/parser_bug/test_parser.py:ParserTests",
+      "content": "\"\"\"Reproducing and regression checks for the intentionally broken fixture.\"\"\"\n\nimport unittest\nfrom parser import parse_numbers\n\n\nclass ParserTests(unittest.TestCase):\n    def test_empty_input(self):\n        self.assertEqual(parse_numbers(\"\"), [])\n\n    def test_whitespace_input(self):\n        self.assertEqual(parse_numbers(\"  \"), [])\n\n    def test_numbers(self):\n        self.assertEqual(parse_numbers(\"1, 2, -3\"), [1, 2, -3])\n\n    def test_invalid_token(self):\n        with self.assertRaises(ValueError):\n            parse_numbers(\"1,nope\")\n\n    def test_empty_middle_field(self):\n        with self.assertRaises(ValueError):\n            parse_numbers(\"1,,2\")\n"
+    },
+    {
+      "ref": "observed-test-run",
+      "content": "test_empty_input (test_parser.ParserTests.test_empty_input) ... ERROR\ntest_empty_middle_field (test_parser.ParserTests.test_empty_middle_field) ... ok\ntest_invalid_token (test_parser.ParserTests.test_invalid_token) ... ok\ntest_numbers (test_parser.ParserTests.test_numbers) ... ok\ntest_whitespace_input (test_parser.ParserTests.test_whitespace_input) ... ERROR\n\n======================================================================\nERROR: test_empty_input (test_parser.ParserTests.test_empty_input)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"examples/model_router/parser_bug/test_parser.py\", line 9, in test_empty_input\n    self.assertEqual(parse_numbers(\"\"), [])\n                     ~~~~~~~~~~~~~^^^^\n  File \"examples/model_router/parser_bug/parser.py\", line 5, in parse_numbers\n    return [int(field.strip()) for field in text.split(\",\")]\n            ~~~^^^^^^^^^^^^^^^\nValueError: invalid literal for int() with base 10: ''\n\n======================================================================\nERROR: test_whitespace_input (test_parser.ParserTests.test_whitespace_input)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"examples/model_router/parser_bug/test_parser.py\", line 12, in test_whitespace_input\n    self.assertEqual(parse_numbers(\"  \"), [])\n                     ~~~~~~~~~~~~~^^^^^^\n  File \"examples/model_router/parser_bug/parser.py\", line 5, in parse_numbers\n    return [int(field.strip()) for field in text.split(\",\")]\n            ~~~^^^^^^^^^^^^^^^\nValueError: invalid literal for int() with base 10: ''\n\n----------------------------------------------------------------------\nRan 5 tests in 0.001s\n\nFAILED (errors=2)\n"
+    }
+  ],
+  "acceptance_criteria": [
+    "Empty input returns an empty list.",
+    "Whitespace-only input returns an empty list.",
+    "The input 1, 2, -3 returns [1, 2, -3].",
+    "Invalid tokens and empty fields inside nonempty input still raise ValueError.",
+    "All five supplied parser checks pass after the fix."
+  ],
+  "missing_requirements": []
+}
