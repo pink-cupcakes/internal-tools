@@ -6,8 +6,9 @@ from pathlib import Path
 import sys
 
 from .core import build_request, route
+from .dispatch import build_dispatch
 from .models import RoutingTrace, Task
-from .replay import replay
+from .replay import _saved_task, replay
 
 
 def configure_parser(parser: argparse.ArgumentParser) -> None:
@@ -46,13 +47,19 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--trace-out", type=Path, help="Save the credential-free trace locally"
     )
-    parser.add_argument(
+    outputs = parser.add_mutually_exclusive_group()
+    outputs.add_argument(
         "--trace",
         "--json",
         dest="full_trace",
         action="store_true",
         help="Print full RoutingTrace JSON (default: recommendation JSON)",
     )
+
+    outputs.add_argument(
+        "--dispatch-name", help="Print explicit-model spawn_agent arguments"
+    )
+    parser.add_argument("--workspace", help="Absolute worker workspace for dispatch")
 
 
 def _print_result(routing_trace: RoutingTrace, *, full_trace: bool) -> None:
@@ -87,9 +94,9 @@ def run_cli(options: argparse.Namespace) -> int:
     request_only = options.request_only
     replay_path = options.replay
     trace_path = options.trace_out
-    full_trace = options.full_trace
 
     try:
+        _validate_dispatch_options(options)
         coding_task = _load_task(options)
         if request_only:
             if coding_task is None:
@@ -105,11 +112,33 @@ def run_cli(options: argparse.Namespace) -> int:
         if trace_path:
             trace_path.parent.mkdir(parents=True, exist_ok=True)
             trace_path.write_text(json.dumps(routing_trace.to_dict(), indent=2) + "\n")
-        _print_result(routing_trace, full_trace=full_trace)
+        _output_result(routing_trace, options)
         return 2 if routing_trace.recommendation.status == "needs_review" else 0
     except (OSError, ValueError, TypeError) as error:
         print(f"model-router: {error}", file=sys.stderr)
         return 1
+
+
+def _validate_dispatch_options(options: argparse.Namespace) -> None:
+    if bool(options.dispatch_name) != bool(options.workspace):
+        raise ValueError("--dispatch-name and --workspace must be supplied together")
+    if options.request_only and options.dispatch_name:
+        raise ValueError("dispatch requires a recommendation, not --request-only")
+    if options.dispatch_name:
+        from .dispatch import validate_dispatch_target
+
+        validate_dispatch_target(options.dispatch_name, options.workspace)
+
+
+def _output_result(trace: RoutingTrace, options: argparse.Namespace) -> None:
+    if options.dispatch_name:
+        args = build_dispatch(
+            _saved_task(trace.request), trace.recommendation,
+            task_name=options.dispatch_name, workspace=options.workspace,
+        )
+        print(json.dumps(args, indent=2))
+    else:
+        _print_result(trace, full_trace=options.full_trace)
 
 
 def main(argv: list[str] | None = None) -> int:

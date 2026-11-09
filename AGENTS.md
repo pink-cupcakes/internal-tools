@@ -1,0 +1,12 @@
+# Routed implementation
+
+- The primary chat coordinates, integrates, and verifies. Its model is chosen by the session; a routing recommendation does not change it.
+- Decompose substantive work into the smallest useful bounded tasks with explicit file ownership, concrete evidence, and acceptance checks. Delegate independent implementation and investigation tasks whenever they can proceed with a compact handoff. Batch trivial related edits; avoid extra agents whose setup costs exceed the work.
+- Read README.md for the router contract. Route each worker task, then use `--dispatch-name NAME --workspace /absolute/repo` to generate the exact `collaboration.spawn_agent` arguments. Call that tool with the generated arguments: explicit `model` and `fork_turns: "none"` are required. Full-history forks inherit the parent model and defeat routing.
+- Put scope, relevant evidence and acceptance checks in the task; do not send full chat history or ask the worker to rediscover context the coordinator already has. Use nonoverlapping editable files and coordinate integration. The coordinator must not duplicate delegated implementation.
+- Record an actual spawn with `model-router-receipt` and its actual session ID. Use `model-router-audit` with local session logs to verify the observed model and account for worker and coordinator usage. A recommendation alone is never execution evidence.
+- Dispatch only actionable recommendations. For unresolved advice, refine scope/evidence or report the blocker. If a requested model is unavailable, record the failure and explicitly reroute; never silently inherit or substitute.
+- Keep router budgets advisory: current collaboration tools cannot enforce hard token caps or expose per-task usage live. Use bounded scope and concise results; never claim hard enforcement. Before more work, account for completed usage and reroute an explicitly scoped retry when needed.
+- Escalate a failed small-model task only with its concrete failure evidence and acceptance checks. Keep retry lineage/receipts so its tokens are counted. Reuse a worker only for the same bounded task and model; a new task gets a fresh context.
+- Count routing overhead, all workers/retries and primary-session coordination. Never claim savings without comparable baseline tasks and verified outcomes. Lower-priced models do not necessarily use fewer tokens.
+- Preserve unrelated work. Run the repository's lint, function-length, schema, and unit checks before committing.

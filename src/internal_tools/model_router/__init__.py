@@ -1,6 +1,8 @@
 """Model routing advice; callers own tools, execution, and budget enforcement."""
 
 from .core import DecisionCallError, build_request, recommend, route
+from .dispatch import build_dispatch
+from .audit import audit_routing
 from .models import (
     Budgets,
     Evidence,
@@ -24,6 +26,8 @@ __all__ = [
     "Task",
     "Uncertainty",
     "build_request",
+    "build_dispatch",
+    "audit_routing",
     "recommend",
     "replay",
     "route",
