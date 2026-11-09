@@ -1,0 +1,46 @@
+{
+  "snapshotDigest": "9aebe385aa897e5e0d7dc99047ee9fe1b462dd2a0a7fd025d8f6d1d6f0a2d4e0",
+  "issues": {
+    "EX-1": {
+      "verdict": "ready",
+      "reason": "Synthetic example reviewed for the offline demo.",
+      "resources": [
+        "demo:analytics:docs"
+      ],
+      "evidence": [
+        "Synthetic demo fixture; not evidence about real work."
+      ]
+    },
+    "EX-2": {
+      "verdict": "ready",
+      "reason": "Synthetic example reviewed for the offline demo.",
+      "resources": [
+        "demo:portal:keyboard"
+      ],
+      "evidence": [
+        "Synthetic demo fixture; not evidence about real work."
+      ]
+    },
+    "EX-3": {
+      "verdict": "ready",
+      "reason": "Synthetic example reviewed for the offline demo.",
+      "resources": [
+        "demo:analytics:export"
+      ],
+      "evidence": [
+        "Synthetic demo fixture; not evidence about real work."
+      ]
+    },
+    "EX-4": {
+      "verdict": "ready",
+      "reason": "Synthetic example reviewed for the offline demo.",
+      "resources": [
+        "demo:analytics:validation"
+      ],
+      "evidence": [
+        "Synthetic demo fixture; not evidence about real work."
+      ]
+    }
+  },
+  "edges": []
+}

@@ -1,6 +1,16 @@
 # Internal Tools
 
-Python 3.11+. Public import: `from internal_tools import model_router`.
+Python 3.11+. Independent public modules:
+
+| Module | Command | Purpose |
+| --- | --- | --- |
+| `internal_tools.model_router` | `internal-tools model-router` | Recommend models and budgets |
+| `internal_tools.linear_next` | `internal-tools linear-next` | Build a reviewed Linear queue grouped by project |
+
+The [Linear queue guide](docs/linear-next/README.md) covers collection, local data,
+the Python API, and the [offline demo](examples/linear_next/README.md).
+Each module owns its interface and performs no work on import. The router details
+below apply to `model_router`.
 
 ## Boundaries
 

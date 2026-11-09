@@ -13,3 +13,6 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+# Local Linear queue evidence and generated reports
+.linear-next/

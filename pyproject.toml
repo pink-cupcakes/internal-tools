@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "internal-tools"
 version = "0.1.0"
-description = "Reusable internal tools, starting with a coding model router."
+description = "Independent internal tools for model routing and Linear work planning."
 requires-python = ">=3.11"
 dependencies = [
     "openai>=3.46.0",
@@ -18,6 +18,9 @@ internal-tools = "internal_tools.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+"internal_tools.linear_next" = ["view.html", "REFRESH.md"]
 
 [tool.ruff]
 target-version = "py311"

@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-01-01T12:00:00Z",
+  "workspace": {
+    "id": "synthetic-workspace",
+    "name": "Offline demo"
+  },
+  "coverage": {
+    "issues": true,
+    "relations": true,
+    "comments": true,
+    "diffs": true,
+    "threads": true,
+    "repositories": true
+  },
+  "issues": [
+    {
+      "id": "EX-1",
+      "title": "Document the reporting contract",
+      "project": "Example Analytics",
+      "projectId": "Example Analytics",
+      "statusType": "unstarted",
+      "priority": {
+        "value": 2
+      },
+      "createdAt": "2026-01-01T00:00:00Z",
+      "relations": {
+        "blocks": [],
+        "blockedBy": []
+      }
+    },
+    {
+      "id": "EX-2",
+      "title": "Polish keyboard navigation",
+      "project": "Example Portal",
+      "projectId": "Example Portal",
+      "statusType": "unstarted",
+      "priority": {
+        "value": 2
+      },
+      "createdAt": "2026-01-01T00:00:00Z",
+      "relations": {
+        "blocks": [],
+        "blockedBy": []
+      }
+    },
+    {
+      "id": "EX-3",
+      "title": "Implement the export producer",
+      "project": "Example Analytics",
+      "projectId": "Example Analytics",
+      "statusType": "started",
+      "priority": {
+        "value": 2
+      },
+      "createdAt": "2026-01-01T00:00:00Z",
+      "relations": {
+        "blocks": [],
+        "blockedBy": []
+      }
+    },
+    {
+      "id": "EX-4",
+      "title": "Verify the export contract",
+      "project": "Example Analytics",
+      "projectId": "Example Analytics",
+      "statusType": "unstarted",
+      "priority": {
+        "value": 2
+      },
+      "createdAt": "2026-01-01T00:00:00Z",
+      "relations": {
+        "blocks": [],
+        "blockedBy": [
+          {
+            "id": "EX-3"
+          }
+        ]
+      }
+    }
+  ],
+  "diffs": [],
+  "activeThreads": [],
+  "repositoryEvidence": [],
+  "warnings": [
+    "Synthetic example only; no live Linear evidence."
+  ]
+}
