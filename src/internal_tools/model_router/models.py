@@ -1,6 +1,6 @@
 """Public inputs, configurable policy, and inspectable routing outputs."""
 
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
     BaseModel,
@@ -55,22 +55,22 @@ class Task(RouterModel):
         return cls.model_validate(task_data)
 
 
-class Limits(RouterModel):
-    """Proposed worker limits; a future executor must enforce them."""
+class Budgets(RouterModel):
+    """Advisory allowances for the calling session, excluding routing usage."""
 
-    max_worker_calls: PositiveInt = 2
-    max_worker_total_tokens: PositiveInt = 8000
-    max_context_tokens: PositiveInt = 6000
-    max_output_tokens: PositiveInt = 2000
+    max_calls: PositiveInt = 2
+    max_total_tokens: PositiveInt = 8000
+    max_input_tokens_per_call: PositiveInt = 6000
+    max_output_tokens_per_call: PositiveInt = 2000
 
     @model_validator(mode="after")
     def validate_token_budget(self) -> Self:
         if (
-            self.max_context_tokens + self.max_output_tokens
-            > self.max_worker_total_tokens
+            self.max_input_tokens_per_call + self.max_output_tokens_per_call
+            > self.max_total_tokens
         ):
             raise ValueError(
-                "one full worker call must fit within the total token limit"
+                "one full model call must fit within the total token budget"
             )
         return self
 
@@ -78,52 +78,72 @@ class Limits(RouterModel):
 class RoutingPolicy(RouterModel):
     """Starting thresholds are uncalibrated; version changes with policy changes."""
 
-    version: NonEmptyText = "initial-1"
-    min_workflow_probability: Probability = 0.75
-    max_small_capability_probability: Probability = 0.25
-    min_strong_capability_probability: Probability = 0.75
-    small_limits: InstanceOf[Limits] = Field(default_factory=Limits)
-    strong_limits: InstanceOf[Limits] = Field(
-        default_factory=lambda: Limits(
-            max_worker_calls=4,
-            max_worker_total_tokens=24000,
-            max_context_tokens=12000,
-            max_output_tokens=4000,
+    version: NonEmptyText = "routing-2"
+    min_task_type_probability: Probability = 0.75
+    uncertain_task_type_action: Literal["strong", "review"] = "strong"
+    max_small_probability: Probability = 0.25
+    min_strong_probability: Probability = 0.75
+    small_model: NonEmptyText = "gpt-6-luna"
+    strong_model: NonEmptyText = "gpt-6.1-sol"
+    small_budgets: InstanceOf[Budgets] = Field(default_factory=Budgets)
+    strong_budgets: InstanceOf[Budgets] = Field(
+        default_factory=lambda: Budgets(
+            max_calls=4,
+            max_total_tokens=24000,
+            max_input_tokens_per_call=12000,
+            max_output_tokens_per_call=4000,
         )
     )
 
     @model_validator(mode="after")
     def validate_threshold_order(self) -> Self:
-        if (
-            self.max_small_capability_probability
-            >= self.min_strong_capability_probability
-        ):
+        if self.max_small_probability >= self.min_strong_probability:
             raise ValueError("small and strong capability thresholds must be ordered")
         return self
 
 
-class Plan(RouterModel):
-    status: str
-    workflow: str | None
-    worker_tier: str | None
-    steps: tuple[str, ...]
-    evidence_refs: tuple[str, ...]
-    acceptance_criteria: tuple[str, ...]
-    permitted_tools: tuple[str, ...]
-    limits: Limits | None
+class ModelRecommendation(RouterModel):
+    tier: Literal["small", "strong"]
+    model_id: NonEmptyText
+
+
+class Uncertainty(RouterModel):
+    task_type_probability: Probability | None = None
+    task_type_confidence: Probability | None = None
+    needs_strong_model_probability: Probability | None = None
+    capability_uncertain: bool | None = None
+    calibrated: Literal[False] = False
+
+
+class Recommendation(RouterModel):
+    status: Literal["recommended", "needs_clarification", "needs_review"]
+    task_type: Literal["explain", "fix", "implement", "clarify"] | None
+    model: ModelRecommendation | None
+    budgets: Budgets | None
+    uncertainty: Uncertainty = Field(default_factory=Uncertainty)
     reason_codes: tuple[str, ...]
-    checks: tuple[str, ...]
     clarification_items: tuple[str, ...] = ()
-    warnings: tuple[str, ...] = ()
-    execution_enabled: bool = False
+
+    @model_validator(mode="after")
+    def validate_recommendation(self) -> Self:
+        if self.status == "recommended":
+            if self.model is None or self.budgets is None:
+                raise ValueError("recommended status requires model and budgets")
+            if self.task_type not in ("explain", "fix", "implement", "clarify"):
+                raise ValueError("recommended status requires an actionable task type")
+            if self.task_type == "clarify" and self.model.tier != "strong":
+                raise ValueError("uncertain clarification requires a strong model")
+        elif self.model is not None or self.budgets is not None:
+            raise ValueError("stopped recommendations cannot select model or budgets")
+        return self
 
 
 class RoutingTrace(RouterModel):
-    source: str
+    source: Literal["live", "simulated", "replay", "skipped"]
     request_sent: bool
     request: dict[str, Any]
     response: Any
-    plan: Plan
+    recommendation: Recommendation
     policy: RoutingPolicy
     elapsed_ms: float
     error: str | None = None

@@ -26,8 +26,8 @@ class RouterTests(unittest.TestCase):
             SIMULATED_RESPONSE_PATH.read_text()
         )
 
-    def assemble_fixture_plan(self, decision_response=None, **policy_overrides):
-        return router.assemble_plan(
+    def recommend_fixture(self, decision_response=None, **policy_overrides):
+        return router.recommend(
             self.coding_task,
             self.simulated_decision_response
             if decision_response is None
@@ -35,32 +35,37 @@ class RouterTests(unittest.TestCase):
             **policy_overrides,
         )
 
-    def test_bug_fix_becomes_bounded_plan(self):
-        plan = self.assemble_fixture_plan()
+    def test_bug_fix_recommends_resources_and_preserves_uncertainty(self):
+        advice = self.recommend_fixture()
         self.assertEqual(
-            (plan.status, plan.workflow, plan.worker_tier),
-            ("ready_for_review", "fix", "small"),
+            (advice.status, advice.task_type, advice.model.tier),
+            ("recommended", "fix", "small"),
         )
-        self.assertEqual(plan.steps, ("inspect", "reproduce", "patch", "verify"))
-        self.assertEqual(
-            plan.evidence_refs, tuple(item.ref for item in self.coding_task.evidence)
+        self.assertEqual(advice.model.model_id, "gpt-6-luna")
+        self.assertEqual(advice.budgets.max_total_tokens, 8000)
+        self.assertEqual(advice.uncertainty.task_type_probability, 0.96)
+        self.assertEqual(advice.uncertainty.task_type_confidence, 0.93)
+        self.assertEqual(advice.uncertainty.needs_strong_model_probability, 0.08)
+        self.assertFalse(advice.uncertainty.capability_uncertain)
+        self.assertFalse(advice.uncertainty.calibrated)
+        self.assertTrue(
+            {"steps", "permitted_tools", "execution_enabled"}.isdisjoint(
+                advice.model_dump()
+            )
         )
-        self.assertEqual(plan.acceptance_criteria, self.coding_task.acceptance_criteria)
-        self.assertEqual(plan.limits.max_worker_total_tokens, 8000)
-        self.assertFalse(plan.execution_enabled)
 
     def test_named_answers_allow_reordering(self):
         self.simulated_decision_response["answers"].reverse()
         self.assertEqual(
-            self.assemble_fixture_plan(),
-            router.assemble_plan(
+            self.recommend_fixture(),
+            router.recommend(
                 self.coding_task, json.loads(SIMULATED_RESPONSE_PATH.read_text())
             ),
         )
 
     def test_probability_drives_gate_not_separate_confidence(self):
         self.simulated_decision_response["answers"][0]["confidence"] = 0.01
-        self.assertEqual(self.assemble_fixture_plan().status, "ready_for_review")
+        self.assertEqual(self.recommend_fixture().status, "recommended")
         self.simulated_decision_response["answers"][0]["probabilities"] = [
             {"value": "explain", "probability": 0.1},
             {"value": "fix", "probability": 0.6},
@@ -69,7 +74,8 @@ class RouterTests(unittest.TestCase):
         ]
         self.simulated_decision_response["answers"][0]["confidence"] = 0.99
         self.assertEqual(
-            self.assemble_fixture_plan().reason_codes, ("uncertain_workflow",)
+            self.recommend_fixture().reason_codes,
+            ("uncertain_task_type_conservative_strong",),
         )
 
     def test_capability_thresholds_and_conservative_middle(self):
@@ -84,9 +90,12 @@ class RouterTests(unittest.TestCase):
                 self.simulated_decision_response["answers"][1]["probability"] = (
                     probability
                 )
-                plan = self.assemble_fixture_plan()
-                self.assertEqual(plan.worker_tier, expected_tier)
+                plan = self.recommend_fixture()
+                self.assertEqual(plan.model.tier, expected_tier)
                 self.assertIn(expected_reason, plan.reason_codes)
+                self.assertEqual(
+                    plan.uncertainty.capability_uncertain, 0.25 < probability < 0.75
+                )
 
     def test_bad_answers_stop_instead_of_executing(self):
         invalid_responses = []
@@ -124,20 +133,17 @@ class RouterTests(unittest.TestCase):
         invalid_responses.append(invalid_response)
         for invalid_response in invalid_responses:
             with self.subTest(response=invalid_response):
-                plan = self.assemble_fixture_plan(invalid_response)
+                plan = self.recommend_fixture(invalid_response)
                 self.assertEqual(plan.status, "needs_review")
-                self.assertFalse(plan.steps)
-                self.assertIsNone(plan.worker_tier)
-                self.assertFalse(plan.execution_enabled)
+                self.assertIsNone(plan.model)
+                self.assertIsNone(plan.budgets)
 
     def test_refusal_is_review(self):
         self.simulated_decision_response["answers"][1] = {
             "type": "refusal",
             "name": "needs_strong_model",
         }
-        self.assertEqual(
-            self.assemble_fixture_plan().reason_codes, ("decision_refused",)
-        )
+        self.assertEqual(self.recommend_fixture().reason_codes, ("decision_refused",))
 
     def test_invalid_workflow_answers_preserve_reason_codes(self):
         options = self.simulated_decision_response["answers"][0]["probabilities"]
@@ -167,10 +173,10 @@ class RouterTests(unittest.TestCase):
             with self.subTest(updates=changes):
                 decision_response = deepcopy(self.simulated_decision_response)
                 decision_response["answers"][0].update(changes)
-                plan = self.assemble_fixture_plan(decision_response)
+                plan = self.recommend_fixture(decision_response)
                 self.assertEqual(plan.status, "needs_review")
                 self.assertEqual(plan.reason_codes, (expected_reason,))
-                self.assertFalse(plan.execution_enabled)
+                self.assertIsNone(plan.model)
 
     def test_declared_missing_requirements_skip_api(self):
         coding_task = router.Task(
@@ -180,9 +186,9 @@ class RouterTests(unittest.TestCase):
         trace = router.route(coding_task, send=send_decision_mock)
         self.assertEqual(trace.source, "skipped")
         self.assertFalse(trace.request_sent)
-        self.assertEqual(trace.plan.status, "needs_clarification")
+        self.assertEqual(trace.recommendation.status, "needs_clarification")
         self.assertEqual(
-            trace.plan.clarification_items, coding_task.missing_requirements
+            trace.recommendation.clarification_items, coding_task.missing_requirements
         )
         send_decision_mock.assert_not_called()
 
@@ -191,12 +197,12 @@ class RouterTests(unittest.TestCase):
         workflow_answer["choice"] = "clarify"
         for option in workflow_answer["probabilities"]:
             option["probability"] = 0.97 if option["value"] == "clarify" else 0.01
-        plan = self.assemble_fixture_plan()
+        plan = self.recommend_fixture()
         self.assertEqual(plan.status, "needs_clarification")
-        self.assertIsNone(plan.worker_tier)
-        self.assertIsNone(plan.limits)
+        self.assertIsNone(plan.model)
+        self.assertIsNone(plan.budgets)
 
-    def test_other_workflows_use_distinct_templates(self):
+    def test_other_task_types_recommend_without_execution_templates(self):
         for expected_workflow in ("explain", "implement"):
             with self.subTest(workflow=expected_workflow):
                 self.simulated_decision_response["answers"][0]["choice"] = (
@@ -208,13 +214,11 @@ class RouterTests(unittest.TestCase):
                     option["probability"] = (
                         0.97 if option["value"] == expected_workflow else 0.01
                     )
-                plan = self.assemble_fixture_plan()
-                self.assertEqual(plan.workflow, expected_workflow)
-                if expected_workflow == "explain":
-                    self.assertNotIn("apply_patch", plan.permitted_tools)
-                    self.assertNotIn("run_tests", plan.permitted_tools)
-                else:
-                    self.assertIn("confirm_acceptance_criteria", plan.steps)
+                plan = self.recommend_fixture()
+                self.assertEqual(plan.task_type, expected_workflow)
+                self.assertEqual(plan.model.tier, "small")
+                self.assertNotIn("steps", plan.model_dump())
+                self.assertNotIn("permitted_tools", plan.model_dump())
 
     def test_evidence_is_data_and_not_a_question_instruction(self):
         coding_task = router.Task(
@@ -248,16 +252,16 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(trace.source, "live")
         self.assertTrue(trace.request_sent)
         self.assertIsNone(trace.response)
-        self.assertEqual(trace.plan.status, "needs_review")
+        self.assertEqual(trace.recommendation.status, "needs_review")
         self.assertEqual(trace.error, "APITimeoutError")
         send_decision_mock.assert_called_once()
 
     def test_invalid_policy_and_input_are_rejected(self):
         for policy_fields in (
-            {"min_workflow_probability": True},
-            {"max_small_capability_probability": 0.9},
-            {"small_limits": {}},
-            {"min_workflow_probability": float("nan")},
+            {"min_task_type_probability": True},
+            {"max_small_probability": 0.9},
+            {"small_budgets": {}},
+            {"min_task_type_probability": float("nan")},
         ):
             with self.subTest(kwargs=policy_fields), self.assertRaises(ValueError):
                 router.RoutingPolicy(**policy_fields)
@@ -269,7 +273,7 @@ class RouterTests(unittest.TestCase):
             with self.subTest(data=task_data), self.assertRaises(ValueError):
                 router.Task.from_dict(task_data)
         with self.assertRaises(ValueError):
-            router.Limits(max_worker_calls=True)
+            router.Budgets(max_calls=True)
 
     def test_sdk_adapter_uses_exact_payload(self):
         from openai.types.decision import Decision
@@ -301,7 +305,7 @@ class RouterTests(unittest.TestCase):
             trace = router.route(self.coding_task)
         openai_constructor.assert_called_once_with(timeout=20.0, max_retries=0)
         client.decisions.create.assert_called_once_with(**trace.request)
-        self.assertEqual(trace.plan.workflow, "fix")
+        self.assertEqual(trace.recommendation.task_type, "fix")
         self.assertEqual(trace.response, decision.model_dump(mode="json"))
         self.assertNotIn("not-a-real-key", json.dumps(trace.to_dict()))
 
@@ -337,7 +341,9 @@ class RouterTests(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             replayed_trace = json.loads(stdout.getvalue())
             self.assertEqual(replayed_trace["source"], "replay")
-            self.assertEqual(replayed_trace["plan"], simulated_trace["plan"])
+            self.assertEqual(
+                replayed_trace["recommendation"], simulated_trace["recommendation"]
+            )
             saved_trace = json.loads(trace_path.read_text())
             saved_trace["request"]["model"] = "different-model"
             trace_path.write_text(json.dumps(saved_trace))
@@ -365,7 +371,7 @@ class RouterTests(unittest.TestCase):
         self.assertEqual(exit_code, 0)
         self.assertEqual(json.loads(stdout.getvalue())["model"], "gpt-6-luna")
 
-    def test_cli_default_simulation_outputs_only_plan(self):
+    def test_cli_default_simulation_outputs_only_recommendation(self):
         with patch("sys.stdout", new_callable=io.StringIO) as stdout:
             exit_code = main(
                 [
@@ -377,10 +383,10 @@ class RouterTests(unittest.TestCase):
             )
         self.assertEqual(exit_code, 0)
         output = json.loads(stdout.getvalue())
-        expected = self.assemble_fixture_plan().model_dump(mode="json")
+        expected = self.recommend_fixture().model_dump(mode="json")
         self.assertEqual(output, expected)
 
-    def test_cli_error_keeps_plan_on_stdout_and_diagnostic_on_stderr(self):
+    def test_cli_error_keeps_recommendation_on_stdout_and_error_on_stderr(self):
         with (
             patch("sys.stdout", new_callable=io.StringIO) as stdout,
             patch("sys.stderr", new_callable=io.StringIO) as stderr,
@@ -410,7 +416,7 @@ class RouterTests(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True):
             trace = router.route(self.coding_task)
         self.assertFalse(trace.request_sent)
-        self.assertEqual(trace.plan.status, "needs_review")
+        self.assertEqual(trace.recommendation.status, "needs_review")
         self.assertEqual(trace.error, "OPENAI_API_KEY is not configured")
 
 

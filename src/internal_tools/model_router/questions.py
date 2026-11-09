@@ -12,15 +12,16 @@ ROUTING_QUESTIONS = [
         "type": "choice",
         "name": "workflow",
         "instructions": "Choose the workflow that best satisfies the coding request. "
-        "Choose clarify when an essential requirement is missing, "
-        "the task is outside these workflows, or the intended "
-        "outcome cannot be determined. Missing code alone may be "
-        "handled by a later inspect step if the outcome is clear.",
+        "Choose clarify only when the intended outcome cannot be determined "
+        "without user input. Routine implementation choices, engine selection, "
+        "and missing code that can be inspected are not blockers. Architecture "
+        "advice, planning, and comparisons without requested edits are explain. "
+        "For mixed requests, choose the primary requested deliverable.",
         "choices": [
             {
                 "value": "explain",
-                "description": "Explain existing code or behavior; no code "
-                "change requested.",
+                "description": "Explain code or behavior, compare approaches, "
+                "or plan architecture; no code change requested.",
             },
             {
                 "value": "fix",

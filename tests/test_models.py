@@ -44,21 +44,22 @@ class ModelTests(unittest.TestCase):
             with self.subTest(fields=fields), self.assertRaises(ValidationError):
                 router.Task.model_validate(fields)
 
-    def test_limits_reject_coercion_and_nonpositive_values(self):
+    def test_budgets_reject_coercion_and_nonpositive_values(self):
         for value in (True, "2", 2.0, 0, -1):
             with self.subTest(value=value), self.assertRaises(ValidationError):
-                router.Limits(max_worker_calls=value)
+                router.Budgets(max_calls=value)
         with self.assertRaisesRegex(ValidationError, "fit within the total"):
-            router.Limits(max_worker_total_tokens=7999)
+            router.Budgets(max_total_tokens=7999)
 
     def test_policy_rejects_invalid_probabilities_and_threshold_order(self):
         for value in (True, "0.75", -0.1, 1.1, float("nan"), float("inf")):
             with self.subTest(value=value), self.assertRaises(ValidationError):
-                router.RoutingPolicy(min_workflow_probability=value)
+                router.RoutingPolicy(min_task_type_probability=value)
         with self.assertRaisesRegex(ValidationError, "thresholds must be ordered"):
-            router.RoutingPolicy(max_small_capability_probability=0.75)
+            router.RoutingPolicy(max_small_probability=0.75)
         self.assertEqual(
-            router.RoutingPolicy(min_workflow_probability=1).min_workflow_probability, 1
+            router.RoutingPolicy(min_task_type_probability=1).min_task_type_probability,
+            1,
         )
 
     def test_models_remain_frozen(self):
@@ -76,7 +77,7 @@ class ModelTests(unittest.TestCase):
             restored.model_dump(mode="json"), trace.model_dump(mode="json")
         )
         self.assertEqual(trace.to_dict(), trace.model_dump())
-        self.assertIsInstance(restored.policy.small_limits, router.Limits)
+        self.assertIsInstance(restored.policy.small_budgets, router.Budgets)
 
     def test_each_request_gets_independent_questions(self):
         coding_task = router.Task(request="Explain this code")

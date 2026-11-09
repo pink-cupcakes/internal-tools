@@ -20,13 +20,16 @@ class CliOutputTests(unittest.TestCase):
             str(EXAMPLES / "parser_bug.response.simulated.json"),
         ]
 
-    def test_inline_request_prints_only_plan(self):
+    def test_inline_request_prints_only_recommendation(self):
         with patch("sys.stdout", new_callable=io.StringIO) as stdout:
             result = main(self.simulated_options())
         self.assertEqual(result, 0)
         plan = json.loads(stdout.getvalue())
-        self.assertEqual(plan["workflow"], "fix")
-        self.assertEqual(plan["steps"], ["inspect", "reproduce", "patch", "verify"])
+        self.assertEqual(plan["task_type"], "fix")
+        self.assertEqual(plan["model"], {"tier": "small", "model_id": "gpt-6-luna"})
+        self.assertIn("budgets", plan)
+        self.assertIn("uncertainty", plan)
+        self.assertNotIn("steps", plan)
         self.assertNotIn("response", plan)
         self.assertNotIn("plan", plan)
 
@@ -40,9 +43,9 @@ class CliOutputTests(unittest.TestCase):
                 self.assertEqual(trace["source"], "simulated")
                 task = trace["request"]["input"][1]["content"][0]["data"]
                 self.assertEqual(task["request"], REQUEST)
-                self.assertEqual(trace["plan"]["workflow"], "fix")
+                self.assertEqual(trace["recommendation"]["task_type"], "fix")
 
-    def test_trace_file_stays_complete_with_plan_only_stdout(self):
+    def test_trace_file_stays_complete_with_recommendation_stdout(self):
         with tempfile.TemporaryDirectory() as folder:
             trace_path = Path(folder) / "run.json"
             with patch("sys.stdout", new_callable=io.StringIO) as stdout:
@@ -52,7 +55,7 @@ class CliOutputTests(unittest.TestCase):
             self.assertEqual(result, 0)
             plan = json.loads(stdout.getvalue())
             trace = json.loads(trace_path.read_text())
-        self.assertEqual(trace["plan"], plan)
+        self.assertEqual(trace["recommendation"], plan)
         self.assertIn("response", trace)
 
     def test_inline_request_preview(self):
@@ -74,4 +77,10 @@ class CliOutputTests(unittest.TestCase):
                         "--request-only",
                     ]
                 )
+        self.assertEqual(error.exception.code, 2)
+
+    def test_executor_flags_are_not_available(self):
+        with patch("sys.stderr", new_callable=io.StringIO):
+            with self.assertRaises(SystemExit) as error:
+                main(["--live", "--request", REQUEST, "--execute"])
         self.assertEqual(error.exception.code, 2)

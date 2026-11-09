@@ -33,7 +33,7 @@ class ReplayTests(unittest.TestCase):
             trace = router.replay(self.saved)
         self.assertEqual(trace.request, self.saved["request"])
         self.assertEqual(trace.response, self.saved["response"])
-        self.assertEqual(trace.plan.workflow, "fix")
+        self.assertEqual(trace.recommendation.task_type, "fix")
         self.assertFalse(trace.request_sent)
 
     def test_supplied_task_mismatch_has_actionable_error(self):
@@ -43,8 +43,12 @@ class ReplayTests(unittest.TestCase):
 
     def test_optional_matching_task_accepts_json_lists(self):
         trace = router.replay(self.saved, task=self.task)
-        self.assertEqual(trace.plan.workflow, "fix")
-        self.assertEqual(trace.plan.acceptance_criteria, self.task.acceptance_criteria)
+        self.assertEqual(trace.recommendation.task_type, "fix")
+        self.assertEqual(trace.recommendation.model.tier, "small")
+        saved_task = trace.request["input"][1]["content"][0]["data"]
+        self.assertEqual(
+            saved_task["acceptance_criteria"], list(self.task.acceptance_criteria)
+        )
 
     def test_cli_replays_saved_evidence_without_current_task_file(self):
         saved_data = self.saved["request"]["input"][1]["content"][0]["data"]

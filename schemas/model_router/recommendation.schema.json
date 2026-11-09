@@ -1,0 +1,205 @@
+{
+  "$defs": {
+    "Budgets": {
+      "additionalProperties": false,
+      "description": "Advisory allowances for the calling session, excluding routing usage.",
+      "properties": {
+        "max_calls": {
+          "default": 2,
+          "exclusiveMinimum": 0,
+          "title": "Max Calls",
+          "type": "integer"
+        },
+        "max_total_tokens": {
+          "default": 8000,
+          "exclusiveMinimum": 0,
+          "title": "Max Total Tokens",
+          "type": "integer"
+        },
+        "max_input_tokens_per_call": {
+          "default": 6000,
+          "exclusiveMinimum": 0,
+          "title": "Max Input Tokens Per Call",
+          "type": "integer"
+        },
+        "max_output_tokens_per_call": {
+          "default": 2000,
+          "exclusiveMinimum": 0,
+          "title": "Max Output Tokens Per Call",
+          "type": "integer"
+        }
+      },
+      "title": "Budgets",
+      "type": "object"
+    },
+    "ModelRecommendation": {
+      "additionalProperties": false,
+      "properties": {
+        "tier": {
+          "enum": [
+            "small",
+            "strong"
+          ],
+          "title": "Tier",
+          "type": "string"
+        },
+        "model_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Model Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tier",
+        "model_id"
+      ],
+      "title": "ModelRecommendation",
+      "type": "object"
+    },
+    "Uncertainty": {
+      "additionalProperties": false,
+      "properties": {
+        "task_type_probability": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Type Probability"
+        },
+        "task_type_confidence": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Type Confidence"
+        },
+        "needs_strong_model_probability": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Needs Strong Model Probability"
+        },
+        "capability_uncertain": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Capability Uncertain"
+        },
+        "calibrated": {
+          "const": false,
+          "default": false,
+          "title": "Calibrated",
+          "type": "boolean"
+        }
+      },
+      "title": "Uncertainty",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "status": {
+      "enum": [
+        "recommended",
+        "needs_clarification",
+        "needs_review"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "task_type": {
+      "anyOf": [
+        {
+          "enum": [
+            "explain",
+            "fix",
+            "implement",
+            "clarify"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Task Type"
+    },
+    "model": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ModelRecommendation"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "budgets": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Budgets"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "uncertainty": {
+      "$ref": "#/$defs/Uncertainty"
+    },
+    "reason_codes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Reason Codes",
+      "type": "array"
+    },
+    "clarification_items": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Clarification Items",
+      "type": "array"
+    }
+  },
+  "required": [
+    "status",
+    "task_type",
+    "model",
+    "budgets",
+    "reason_codes"
+  ],
+  "title": "Recommendation",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

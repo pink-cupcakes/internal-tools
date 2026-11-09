@@ -19,5 +19,7 @@ jobs:
         run: uv run --locked --no-editable ruff check .
       - name: Check function length
         run: uv run --locked --no-editable python scripts/check_function_length.py
+      - name: Check routing schemas
+        run: uv run --locked --no-editable python scripts/generate_model_router_schemas.py --check
       - name: Run tests
         run: uv run --locked --no-editable python -m unittest discover -s tests -v

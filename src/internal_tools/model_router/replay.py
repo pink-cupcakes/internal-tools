@@ -3,7 +3,7 @@
 from copy import deepcopy
 from typing import Any
 
-from .core import assemble_plan, build_request
+from .core import build_request, recommend
 from .models import RoutingPolicy, RoutingTrace, Task
 
 
@@ -60,7 +60,7 @@ def replay(
         request_sent=False,
         request=deepcopy(request),
         response=deepcopy(saved_trace["response"]),
-        plan=assemble_plan(original_task, saved_trace["response"], policy),
+        recommendation=recommend(original_task, saved_trace["response"], policy),
         policy=policy,
         elapsed_ms=0,
     )

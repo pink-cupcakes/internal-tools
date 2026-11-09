@@ -1,0 +1,315 @@
+{
+  "$defs": {
+    "AnswerAnswerResourceChoice": {
+      "additionalProperties": true,
+      "properties": {
+        "choice": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "title": "Choice"
+        },
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "probabilities": {
+          "items": {
+            "$ref": "#/$defs/AnswerAnswerResourceChoiceProbability"
+          },
+          "title": "Probabilities",
+          "type": "array"
+        },
+        "type": {
+          "const": "choice",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "choice",
+        "confidence",
+        "probabilities",
+        "type"
+      ],
+      "title": "AnswerAnswerResourceChoice",
+      "type": "object"
+    },
+    "AnswerAnswerResourceChoiceProbability": {
+      "additionalProperties": true,
+      "properties": {
+        "probability": {
+          "title": "Probability",
+          "type": "number"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "boolean"
+            }
+          ],
+          "title": "Value"
+        }
+      },
+      "required": [
+        "probability",
+        "value"
+      ],
+      "title": "AnswerAnswerResourceChoiceProbability",
+      "type": "object"
+    },
+    "AnswerAnswerResourcePredicate": {
+      "additionalProperties": true,
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "probability": {
+          "title": "Probability",
+          "type": "number"
+        },
+        "type": {
+          "const": "predicate",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "probability",
+        "type"
+      ],
+      "title": "AnswerAnswerResourcePredicate",
+      "type": "object"
+    },
+    "AnswerAnswerResourceRefusal": {
+      "additionalProperties": true,
+      "description": "The model declined to answer this question.\n\nOther questions in the same request can still receive answers.",
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "type": {
+          "const": "refusal",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "type"
+      ],
+      "title": "AnswerAnswerResourceRefusal",
+      "type": "object"
+    },
+    "AnswerAnswerResourceScore": {
+      "additionalProperties": true,
+      "properties": {
+        "confidence": {
+          "title": "Confidence",
+          "type": "number"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        },
+        "probabilities": {
+          "items": {
+            "$ref": "#/$defs/AnswerAnswerResourceScoreProbability"
+          },
+          "title": "Probabilities",
+          "type": "array"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "type": {
+          "const": "score",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "confidence",
+        "probabilities",
+        "score",
+        "type"
+      ],
+      "title": "AnswerAnswerResourceScore",
+      "type": "object"
+    },
+    "AnswerAnswerResourceScoreProbability": {
+      "additionalProperties": true,
+      "properties": {
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "probability": {
+          "title": "Probability",
+          "type": "number"
+        },
+        "value": {
+          "title": "Value",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "label",
+        "probability",
+        "value"
+      ],
+      "title": "AnswerAnswerResourceScoreProbability",
+      "type": "object"
+    },
+    "Usage": {
+      "additionalProperties": true,
+      "description": "Token usage for the request.",
+      "properties": {
+        "input_tokens": {
+          "title": "Input Tokens",
+          "type": "integer"
+        },
+        "input_tokens_details": {
+          "$ref": "#/$defs/UsageInputTokensDetails"
+        },
+        "output_tokens": {
+          "title": "Output Tokens",
+          "type": "integer"
+        },
+        "output_tokens_details": {
+          "$ref": "#/$defs/UsageOutputTokensDetails"
+        },
+        "total_tokens": {
+          "title": "Total Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "input_tokens",
+        "input_tokens_details",
+        "output_tokens",
+        "output_tokens_details",
+        "total_tokens"
+      ],
+      "title": "Usage",
+      "type": "object"
+    },
+    "UsageInputTokensDetails": {
+      "additionalProperties": true,
+      "properties": {
+        "cache_write_tokens": {
+          "title": "Cache Write Tokens",
+          "type": "integer"
+        },
+        "cached_tokens": {
+          "title": "Cached Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cache_write_tokens",
+        "cached_tokens"
+      ],
+      "title": "UsageInputTokensDetails",
+      "type": "object"
+    },
+    "UsageOutputTokensDetails": {
+      "additionalProperties": true,
+      "properties": {
+        "reasoning_tokens": {
+          "title": "Reasoning Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "reasoning_tokens"
+      ],
+      "title": "UsageOutputTokensDetails",
+      "type": "object"
+    }
+  },
+  "additionalProperties": true,
+  "properties": {
+    "answers": {
+      "items": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/AnswerAnswerResourcePredicate"
+          },
+          {
+            "$ref": "#/$defs/AnswerAnswerResourceChoice"
+          },
+          {
+            "$ref": "#/$defs/AnswerAnswerResourceScore"
+          },
+          {
+            "$ref": "#/$defs/AnswerAnswerResourceRefusal"
+          }
+        ]
+      },
+      "title": "Answers",
+      "type": "array"
+    },
+    "model": {
+      "title": "Model",
+      "type": "string"
+    },
+    "usage": {
+      "$ref": "#/$defs/Usage"
+    }
+  },
+  "required": [
+    "answers",
+    "model",
+    "usage"
+  ],
+  "title": "Decision",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

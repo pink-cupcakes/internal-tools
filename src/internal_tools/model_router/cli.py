@@ -51,13 +51,13 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
         "--json",
         dest="full_trace",
         action="store_true",
-        help="Print full RoutingTrace JSON (default: plan JSON)",
+        help="Print full RoutingTrace JSON (default: recommendation JSON)",
     )
 
 
 def _print_result(routing_trace: RoutingTrace, *, full_trace: bool) -> None:
     """Keep stdout as one JSON object and send call diagnostics to stderr."""
-    result = routing_trace if full_trace else routing_trace.plan
+    result = routing_trace if full_trace else routing_trace.recommendation
     print(result.model_dump_json(indent=2))
     if routing_trace.error:
         print(f"model-router: {routing_trace.error}", file=sys.stderr)
@@ -83,7 +83,7 @@ def _route_from_options(task: Task | None, options: argparse.Namespace) -> Routi
     return route(task)
 
 
-def execute(options: argparse.Namespace) -> int:
+def run_cli(options: argparse.Namespace) -> int:
     request_only = options.request_only
     replay_path = options.replay
     trace_path = options.trace_out
@@ -106,7 +106,7 @@ def execute(options: argparse.Namespace) -> int:
             trace_path.parent.mkdir(parents=True, exist_ok=True)
             trace_path.write_text(json.dumps(routing_trace.to_dict(), indent=2) + "\n")
         _print_result(routing_trace, full_trace=full_trace)
-        return 2 if routing_trace.plan.status == "needs_review" else 0
+        return 2 if routing_trace.recommendation.status == "needs_review" else 0
     except (OSError, ValueError, TypeError) as error:
         print(f"model-router: {error}", file=sys.stderr)
         return 1
@@ -115,4 +115,4 @@ def execute(options: argparse.Namespace) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m internal_tools.model_router")
     configure_parser(parser)
-    return execute(parser.parse_args(argv))
+    return run_cli(parser.parse_args(argv))

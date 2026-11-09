@@ -1,0 +1,26 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "tier": {
+      "enum": [
+        "small",
+        "strong"
+      ],
+      "title": "Tier",
+      "type": "string"
+    },
+    "model_id": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Model Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "tier",
+    "model_id"
+  ],
+  "title": "ModelRecommendation",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -1,0 +1,102 @@
+{
+  "$defs": {
+    "Budgets": {
+      "additionalProperties": false,
+      "description": "Advisory allowances for the calling session, excluding routing usage.",
+      "properties": {
+        "max_calls": {
+          "default": 2,
+          "exclusiveMinimum": 0,
+          "title": "Max Calls",
+          "type": "integer"
+        },
+        "max_total_tokens": {
+          "default": 8000,
+          "exclusiveMinimum": 0,
+          "title": "Max Total Tokens",
+          "type": "integer"
+        },
+        "max_input_tokens_per_call": {
+          "default": 6000,
+          "exclusiveMinimum": 0,
+          "title": "Max Input Tokens Per Call",
+          "type": "integer"
+        },
+        "max_output_tokens_per_call": {
+          "default": 2000,
+          "exclusiveMinimum": 0,
+          "title": "Max Output Tokens Per Call",
+          "type": "integer"
+        }
+      },
+      "title": "Budgets",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Starting thresholds are uncalibrated; version changes with policy changes.",
+  "properties": {
+    "version": {
+      "default": "routing-2",
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Version",
+      "type": "string"
+    },
+    "min_task_type_probability": {
+      "default": 0.75,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Min Task Type Probability",
+      "type": "number"
+    },
+    "uncertain_task_type_action": {
+      "default": "strong",
+      "enum": [
+        "strong",
+        "review"
+      ],
+      "title": "Uncertain Task Type Action",
+      "type": "string"
+    },
+    "max_small_probability": {
+      "default": 0.25,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Max Small Probability",
+      "type": "number"
+    },
+    "min_strong_probability": {
+      "default": 0.75,
+      "maximum": 1,
+      "minimum": 0,
+      "title": "Min Strong Probability",
+      "type": "number"
+    },
+    "small_model": {
+      "default": "gpt-6-luna",
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Small Model",
+      "type": "string"
+    },
+    "strong_model": {
+      "default": "gpt-6.1-sol",
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Strong Model",
+      "type": "string"
+    },
+    "small_budgets": {
+      "$ref": "#/$defs/Budgets",
+      "title": "Small Budgets"
+    },
+    "strong_budgets": {
+      "$ref": "#/$defs/Budgets",
+      "title": "Strong Budgets"
+    }
+  },
+  "title": "RoutingPolicy",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

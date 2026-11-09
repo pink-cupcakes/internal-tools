@@ -1,0 +1,68 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "task_type_probability": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Task Type Probability"
+    },
+    "task_type_confidence": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Task Type Confidence"
+    },
+    "needs_strong_model_probability": {
+      "anyOf": [
+        {
+          "maximum": 1,
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Needs Strong Model Probability"
+    },
+    "capability_uncertain": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Capability Uncertain"
+    },
+    "calibrated": {
+      "const": false,
+      "default": false,
+      "title": "Calibrated",
+      "type": "boolean"
+    }
+  },
+  "title": "Uncertainty",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

@@ -1,20 +1,22 @@
-"""Bounded question construction and deterministic plan assembly."""
+"""Bounded task classification, model recommendations, and advisory budgets."""
 
 from copy import deepcopy
 import math
 from time import perf_counter
 from typing import Any, Callable
 
-from .models import Plan, RoutingPolicy, RoutingTrace, Task
+from .models import (
+    ModelRecommendation,
+    Recommendation,
+    RoutingPolicy,
+    RoutingTrace,
+    Task,
+    Uncertainty,
+)
 from .questions import ROUTING_INSTRUCTIONS, ROUTING_QUESTIONS
 
 ROUTER_MODEL = "gpt-6-luna"
 ALLOWED_WORKFLOWS = ("explain", "fix", "implement", "clarify")
-WORKFLOW_STEPS = {
-    "explain": ("inspect", "explain", "check_claims"),
-    "fix": ("inspect", "reproduce", "patch", "verify"),
-    "implement": ("inspect", "confirm_acceptance_criteria", "implement", "verify"),
-}
 
 
 class DecisionCallError(Exception):
@@ -75,7 +77,9 @@ def _validate_named_answers(decision_response: Any) -> dict[str, dict[str, Any]]
     return answers_by_question
 
 
-def _validate_workflow_answer(workflow_answer: dict[str, Any]) -> tuple[str, float]:
+def _validate_workflow_answer(
+    workflow_answer: dict[str, Any],
+) -> tuple[str, float, float]:
     """Validate the complete distribution before trusting its selected choice."""
     selected_workflow = workflow_answer.get("choice")
     if (
@@ -83,9 +87,7 @@ def _validate_workflow_answer(workflow_answer: dict[str, Any]) -> tuple[str, flo
         or selected_workflow not in ALLOWED_WORKFLOWS
     ):
         raise ValueError("unknown_workflow")
-    _validate_probability(
-        workflow_answer.get("confidence")
-    )  # Distinct from selected-option probability.
+    confidence = _validate_probability(workflow_answer.get("confidence"))
     options = workflow_answer.get("probabilities")
     if not isinstance(options, list):
         raise ValueError("invalid_distribution")
@@ -110,10 +112,12 @@ def _validate_workflow_answer(workflow_answer: dict[str, Any]) -> tuple[str, flo
         < max(probability_by_workflow.values()) - 1e-9
     ):
         raise ValueError("choice_distribution_mismatch")
-    return selected_workflow, probability_by_workflow[selected_workflow]
+    return selected_workflow, probability_by_workflow[selected_workflow], confidence
 
 
-def _validate_decision_response(decision_response: Any) -> tuple[str, float, float]:
+def _validate_decision_response(
+    decision_response: Any,
+) -> tuple[str, float, float, float]:
     answers_by_question = _validate_named_answers(decision_response)
     workflow_answer, capability_answer = (
         answers_by_question["workflow"],
@@ -124,111 +128,125 @@ def _validate_decision_response(decision_response: Any) -> tuple[str, float, flo
         or capability_answer.get("type") != "predicate"
     ):
         raise ValueError("unexpected_answer_type")
-    selected_workflow, selected_workflow_probability = _validate_workflow_answer(
-        workflow_answer
-    )
+    task_type, probability, confidence = _validate_workflow_answer(workflow_answer)
     return (
-        selected_workflow,
-        selected_workflow_probability,
+        task_type,
+        probability,
+        confidence,
         _validate_probability(capability_answer.get("probability")),
     )
 
 
-def _build_stopped_plan(task: Task, plan_status: str, reason_code: str) -> Plan:
-    needs_clarification = plan_status == "needs_clarification"
-    return Plan(
-        status=plan_status,
-        workflow="clarify" if needs_clarification else None,
-        worker_tier=None,
-        steps=("clarify_requirements",) if needs_clarification else (),
-        evidence_refs=tuple(item.ref for item in task.evidence),
-        acceptance_criteria=task.acceptance_criteria,
-        permitted_tools=(),
-        limits=None,
-        reason_codes=(reason_code,),
-        checks=("execution_disabled",),
-        clarification_items=task.missing_requirements
-        or (
-            ("Specify the intended outcome or missing requirements.",)
-            if needs_clarification
-            else ()
-        ),
+def _stop(
+    status: str,
+    reason: str,
+    *,
+    task_type: str | None = None,
+    uncertainty: Uncertainty | None = None,
+    clarification_items: tuple[str, ...] = (),
+) -> Recommendation:
+    return Recommendation(
+        status=status,
+        task_type=task_type,
+        model=None,
+        budgets=None,
+        uncertainty=uncertainty or Uncertainty(),
+        reason_codes=(reason,),
+        clarification_items=clarification_items,
     )
 
 
-def _select_worker_tier(
+def _select_tier(
     strong_model_probability: float, policy: RoutingPolicy
 ) -> tuple[str, str]:
-    if strong_model_probability <= policy.max_small_capability_probability:
+    if strong_model_probability <= policy.max_small_probability:
         return "small", "low_strong_model_probability"
-    if strong_model_probability >= policy.min_strong_capability_probability:
+    if strong_model_probability >= policy.min_strong_probability:
         return "strong", "high_strong_model_probability"
     return "strong", "uncertain_capability_conservative_strong"
 
 
-def _build_ready_plan(
-    task: Task,
-    selected_workflow: str,
-    worker_tier: str,
-    worker_tier_reason: str,
+def _uncertainty(
+    probability: float,
+    confidence: float,
+    strong_probability: float,
     policy: RoutingPolicy,
-) -> Plan:
-    plan_warnings = ["thresholds_uncalibrated", "worker_limits_not_yet_enforced"]
-    if not task.evidence:
-        plan_warnings.append("no_code_evidence_supplied_inspect_before_work")
-    return Plan(
-        status="ready_for_review",
-        workflow=selected_workflow,
-        worker_tier=worker_tier,
-        steps=WORKFLOW_STEPS[selected_workflow],
-        evidence_refs=tuple(item.ref for item in task.evidence),
-        acceptance_criteria=task.acceptance_criteria,
-        permitted_tools=("read_file", "search")
-        + (() if selected_workflow == "explain" else ("run_tests", "apply_patch")),
-        limits=policy.small_limits if worker_tier == "small" else policy.strong_limits,
-        reason_codes=(
-            "workflow_probability_passed",
-            worker_tier_reason,
-            "template_selected_in_code",
+) -> Uncertainty:
+    return Uncertainty(
+        task_type_probability=probability,
+        task_type_confidence=confidence,
+        needs_strong_model_probability=strong_probability,
+        capability_uncertain=(
+            policy.max_small_probability
+            < strong_probability
+            < policy.min_strong_probability
         ),
-        checks=(
-            "named_answers_valid",
-            "answer_types_valid",
-            "workflow_allowed",
-            "no_declared_missing_requirements",
-            "workflow_probability_passed",
-            "execution_disabled",
-        ),
-        warnings=tuple(plan_warnings),
     )
 
 
-def assemble_plan(
+def recommend(
     task: Task, response: Any, policy: RoutingPolicy | None = None
-) -> Plan:
-    """Validate named answers and apply local rules; never generate extra steps."""
+) -> Recommendation:
+    """Return resource advice; execution and budget enforcement belong to caller."""
     policy = policy or RoutingPolicy()
     if task.missing_requirements:
-        return _build_stopped_plan(
-            task, "needs_clarification", "declared_missing_requirements"
+        return _stop(
+            "needs_clarification",
+            "declared_missing_requirements",
+            task_type="clarify",
+            clarification_items=task.missing_requirements,
         )
     try:
-        selected_workflow, selected_workflow_probability, strong_model_probability = (
+        task_type, probability, confidence, strong_probability = (
             _validate_decision_response(response)
         )
     except ValueError as error:
-        return _build_stopped_plan(task, "needs_review", str(error))
-    if selected_workflow_probability < policy.min_workflow_probability:
-        return _build_stopped_plan(task, "needs_review", "uncertain_workflow")
-    if selected_workflow == "clarify":
-        return _build_stopped_plan(
-            task, "needs_clarification", "workflow_requires_clarification"
+        return _stop("needs_review", str(error))
+    uncertainty = _uncertainty(probability, confidence, strong_probability, policy)
+    if probability < policy.min_task_type_probability:
+        return _uncertain_workflow(task_type, uncertainty, policy)
+    if task_type == "clarify":
+        return _stop(
+            "needs_clarification",
+            "task_requires_clarification",
+            task_type=task_type,
+            uncertainty=uncertainty,
+            clarification_items=(
+                "Specify the intended outcome or missing requirements.",
+            ),
         )
-    worker_tier, worker_tier_reason = _select_worker_tier(
-        strong_model_probability, policy
+    tier, reason = _select_tier(strong_probability, policy)
+    return Recommendation(
+        status="recommended",
+        task_type=task_type,
+        model=ModelRecommendation(
+            tier=tier,
+            model_id=policy.small_model if tier == "small" else policy.strong_model,
+        ),
+        budgets=policy.small_budgets if tier == "small" else policy.strong_budgets,
+        uncertainty=uncertainty,
+        reason_codes=("task_type_probability_passed", reason),
     )
-    return _build_ready_plan(
-        task, selected_workflow, worker_tier, worker_tier_reason, policy
+
+
+def _uncertain_workflow(
+    task_type: str, uncertainty: Uncertainty, policy: RoutingPolicy
+) -> Recommendation:
+    """Escalate valid but ambiguous classification to a worker, not a human."""
+    if policy.uncertain_task_type_action == "review":
+        return _stop(
+            "needs_review",
+            "uncertain_task_type",
+            task_type=task_type,
+            uncertainty=uncertainty,
+        )
+    return Recommendation(
+        status="recommended",
+        task_type=task_type,
+        model=ModelRecommendation(tier="strong", model_id=policy.strong_model),
+        budgets=policy.strong_budgets,
+        uncertainty=uncertainty,
+        reason_codes=("uncertain_task_type_conservative_strong",),
     )
 
 
@@ -253,7 +271,7 @@ def route(
     policy: RoutingPolicy | None = None,
     source: str = "live",
 ) -> RoutingTrace:
-    """Route once and retain the body, raw response, policy, and assembled plan."""
+    """Route once and retain the raw response, policy, and recommendation."""
     policy = policy or RoutingPolicy()
     if source not in {"live", "simulated", "replay"}:
         raise ValueError("source must be live, simulated, or replay")
@@ -265,7 +283,7 @@ def route(
             request_sent=False,
             request=request_body,
             response=None,
-            plan=assemble_plan(task, None, policy),
+            recommendation=recommend(task, None, policy),
             policy=policy,
             elapsed_ms=0,
         )
@@ -278,7 +296,7 @@ def route(
             request_sent=error.request_sent,
             request=request_body,
             response=None,
-            plan=_build_stopped_plan(task, "needs_review", "decision_call_failed"),
+            recommendation=_stop("needs_review", "decision_call_failed"),
             policy=policy,
             elapsed_ms=round((perf_counter() - started_at) * 1000, 3),
             error=str(error),
@@ -288,7 +306,7 @@ def route(
         request_sent=source == "live",
         request=request_body,
         response=decision_response,
-        plan=assemble_plan(task, decision_response, policy),
+        recommendation=recommend(task, decision_response, policy),
         policy=policy,
         elapsed_ms=round((perf_counter() - started_at) * 1000, 3),
     )

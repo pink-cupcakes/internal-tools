@@ -1,0 +1,332 @@
+{
+  "$defs": {
+    "Budgets": {
+      "additionalProperties": false,
+      "description": "Advisory allowances for the calling session, excluding routing usage.",
+      "properties": {
+        "max_calls": {
+          "default": 2,
+          "exclusiveMinimum": 0,
+          "title": "Max Calls",
+          "type": "integer"
+        },
+        "max_total_tokens": {
+          "default": 8000,
+          "exclusiveMinimum": 0,
+          "title": "Max Total Tokens",
+          "type": "integer"
+        },
+        "max_input_tokens_per_call": {
+          "default": 6000,
+          "exclusiveMinimum": 0,
+          "title": "Max Input Tokens Per Call",
+          "type": "integer"
+        },
+        "max_output_tokens_per_call": {
+          "default": 2000,
+          "exclusiveMinimum": 0,
+          "title": "Max Output Tokens Per Call",
+          "type": "integer"
+        }
+      },
+      "title": "Budgets",
+      "type": "object"
+    },
+    "ModelRecommendation": {
+      "additionalProperties": false,
+      "properties": {
+        "tier": {
+          "enum": [
+            "small",
+            "strong"
+          ],
+          "title": "Tier",
+          "type": "string"
+        },
+        "model_id": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Model Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tier",
+        "model_id"
+      ],
+      "title": "ModelRecommendation",
+      "type": "object"
+    },
+    "Recommendation": {
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "recommended",
+            "needs_clarification",
+            "needs_review"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "task_type": {
+          "anyOf": [
+            {
+              "enum": [
+                "explain",
+                "fix",
+                "implement",
+                "clarify"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Task Type"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModelRecommendation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "budgets": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Budgets"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "uncertainty": {
+          "$ref": "#/$defs/Uncertainty"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "clarification_items": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "title": "Clarification Items",
+          "type": "array"
+        }
+      },
+      "required": [
+        "status",
+        "task_type",
+        "model",
+        "budgets",
+        "reason_codes"
+      ],
+      "title": "Recommendation",
+      "type": "object"
+    },
+    "RoutingPolicy": {
+      "additionalProperties": false,
+      "description": "Starting thresholds are uncalibrated; version changes with policy changes.",
+      "properties": {
+        "version": {
+          "default": "routing-2",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Version",
+          "type": "string"
+        },
+        "min_task_type_probability": {
+          "default": 0.75,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Min Task Type Probability",
+          "type": "number"
+        },
+        "uncertain_task_type_action": {
+          "default": "strong",
+          "enum": [
+            "strong",
+            "review"
+          ],
+          "title": "Uncertain Task Type Action",
+          "type": "string"
+        },
+        "max_small_probability": {
+          "default": 0.25,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Max Small Probability",
+          "type": "number"
+        },
+        "min_strong_probability": {
+          "default": 0.75,
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Min Strong Probability",
+          "type": "number"
+        },
+        "small_model": {
+          "default": "gpt-6-luna",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Small Model",
+          "type": "string"
+        },
+        "strong_model": {
+          "default": "gpt-6.1-sol",
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Strong Model",
+          "type": "string"
+        },
+        "small_budgets": {
+          "$ref": "#/$defs/Budgets",
+          "title": "Small Budgets"
+        },
+        "strong_budgets": {
+          "$ref": "#/$defs/Budgets",
+          "title": "Strong Budgets"
+        }
+      },
+      "title": "RoutingPolicy",
+      "type": "object"
+    },
+    "Uncertainty": {
+      "additionalProperties": false,
+      "properties": {
+        "task_type_probability": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Type Probability"
+        },
+        "task_type_confidence": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Task Type Confidence"
+        },
+        "needs_strong_model_probability": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Needs Strong Model Probability"
+        },
+        "capability_uncertain": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Capability Uncertain"
+        },
+        "calibrated": {
+          "const": false,
+          "default": false,
+          "title": "Calibrated",
+          "type": "boolean"
+        }
+      },
+      "title": "Uncertainty",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "source": {
+      "enum": [
+        "live",
+        "simulated",
+        "replay",
+        "skipped"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "request_sent": {
+      "title": "Request Sent",
+      "type": "boolean"
+    },
+    "request": {
+      "additionalProperties": true,
+      "title": "Request",
+      "type": "object"
+    },
+    "response": {
+      "title": "Response"
+    },
+    "recommendation": {
+      "$ref": "#/$defs/Recommendation"
+    },
+    "policy": {
+      "$ref": "#/$defs/RoutingPolicy"
+    },
+    "elapsed_ms": {
+      "title": "Elapsed Ms",
+      "type": "number"
+    },
+    "error": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error"
+    }
+  },
+  "required": [
+    "source",
+    "request_sent",
+    "request",
+    "response",
+    "recommendation",
+    "policy",
+    "elapsed_ms"
+  ],
+  "title": "RoutingTrace",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

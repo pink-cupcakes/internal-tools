@@ -1,19 +1,30 @@
-"""Plan-only coding router; importing this module makes no API requests."""
+"""Model routing advice; callers own tools, execution, and budget enforcement."""
 
-from .core import DecisionCallError, assemble_plan, build_request, route
-from .models import Evidence, Limits, Plan, RoutingPolicy, RoutingTrace, Task
+from .core import DecisionCallError, build_request, recommend, route
+from .models import (
+    Budgets,
+    Evidence,
+    ModelRecommendation,
+    Recommendation,
+    RoutingPolicy,
+    RoutingTrace,
+    Task,
+    Uncertainty,
+)
 from .replay import replay
 
 __all__ = [
     "DecisionCallError",
     "Evidence",
-    "Limits",
-    "Plan",
+    "Budgets",
+    "ModelRecommendation",
+    "Recommendation",
     "RoutingPolicy",
     "RoutingTrace",
     "Task",
-    "assemble_plan",
+    "Uncertainty",
     "build_request",
+    "recommend",
     "replay",
     "route",
 ]

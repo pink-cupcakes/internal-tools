@@ -2,7 +2,7 @@
 
 Run from the repository root. [Options and schemas](../../README.md).
 
-Default stdout: **Plan JSON only**. Add `--trace` for full request/response/plan JSON (`--json` is an alias). `--trace-out FILE` saves the full trace while stdout stays plan-only.
+Default stdout: **Recommendation JSON only**. Add `--trace` for full request/response/recommendation JSON (`--json` is an alias). `--trace-out FILE` saves the full trace while stdout stays recommendation-only.
 
 ## Inline request
 
@@ -46,4 +46,4 @@ Uses the saved task and response. Optional `--task FILE` enforces an exact reque
 | `parser_bug.response.simulated.json` | Invented answers; no measured usage |
 | `parser_bug/` | Intentionally broken parser; two empty-input errors expected |
 
-The live trace is local and ignored by Git. The router returns a plan; the fixture remains unchanged.
+The live trace is local and ignored by Git. The router returns resource advice; the fixture remains unchanged.

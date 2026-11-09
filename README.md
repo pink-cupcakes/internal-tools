@@ -8,23 +8,33 @@ Python 3.11+. Public import: `from internal_tools import model_router`.
 | --- | --- | --- |
 | `internal_tools` | Exports independent tool modules | None on import |
 | `build_request` | Task → Decisions request body | None |
-| `route` | Request → answers → plan + trace | At most one live API call |
-| `assemble_plan` | Answers + policy → fixed plan template | None |
-| `replay` | Saved request + response → plan under current policy | No API call |
+| `route` | Task → model recommendation, budgets, uncertainty + trace | At most one Decisions API call |
+| `recommend` | Recorded answers + policy → recommendation | None |
+| `replay` | Saved request + response → current recommendation | No API call |
 | CLI | Read files, call module, print/save output | File I/O; API only in live mode |
 
-**Implemented:** routing and plan assembly. **Outside scope:** repository discovery, worker execution, code edits, test execution, budget enforcement.
+**Router owns:** classification, model recommendation, advisory budgets, uncertainty.
+
+**Calling session owns:** context gathering, planning, model dispatch, tools, edits, tests, and budget enforcement.
 
 ## Python API
 
 ```text
 build_request(task: Task) -> dict
-assemble_plan(task: Task, response, policy=None) -> Plan
+recommend(task: Task, response, policy=None) -> Recommendation
 route(task: Task, *, send=None, policy=None, source="live") -> RoutingTrace
 replay(saved_trace, *, task=None, policy=None) -> RoutingTrace
 ```
 
-Exports: `Task`, `Evidence`, `Limits`, `RoutingPolicy`, `Plan`, `RoutingTrace`, `DecisionCallError`, and the functions above. Data models are frozen Pydantic models; construct with named arguments. `send` injects a response callable.
+Data models: `Task`, `Evidence`, `Budgets`, `ModelRecommendation`, `Uncertainty`, `Recommendation`, `RoutingPolicy`, `RoutingTrace`. All are frozen Pydantic models. `send` injects a response callable. No executor is exported.
+
+```python
+from internal_tools import model_router
+
+task = model_router.Task(request="Fix empty input raising ValueError.")
+advice = model_router.route(task).recommendation
+print(advice.model_dump_json(indent=2))
+```
 
 ## CLI options
 
@@ -38,15 +48,15 @@ Choose **one** mode:
 | Mode | Task required? | API calls | Output |
 | --- | --- | --- | --- |
 | `--request-only` | `--request TEXT` or `--task FILE` | 0 | Request body JSON |
-| `--live` | `--request TEXT` or `--task FILE` | 0–1 | Plan JSON |
-| `--simulate RESPONSE.json` | `--request TEXT` or `--task FILE` | 0 | Plan JSON |
-| `--replay TRACE.json` | Optional | 0 | Plan JSON |
+| `--live` | `--request TEXT` or `--task FILE` | 0–1 | Recommendation JSON |
+| `--simulate RESPONSE.json` | `--request TEXT` or `--task FILE` | 0 | Recommendation JSON |
+| `--replay TRACE.json` | Optional | 0 | Recommendation JSON |
 
 | Option | Behavior |
 | --- | --- |
 | `--request TEXT` | Inline request. Mutually exclusive with `--task`. |
 | `--task FILE` | Read Task JSON. With replay, require a match to the saved request. |
-| `--trace` | Print full RoutingTrace JSON instead of Plan JSON. |
+| `--trace` | Print full RoutingTrace JSON instead of Recommendation JSON. |
 | `--json` | Compatibility alias for `--trace`. |
 | `--trace-out FILE` | Save RoutingTrace JSON; ignored in request-only mode. |
 | `--env-file FILE` | Live only; default `.env`. Existing environment values win. |
@@ -71,42 +81,40 @@ Task {
 
 Non-whitespace strings; unique evidence refs; unknown fields rejected.
 
-## Output schema: Plan
-
-Values below describe output emitted by application rules.
+## Output schema: Recommendation
 
 ```text
-Workflow = "explain" | "fix" | "implement" | "clarify"
-
-Plan {
-  status: "ready_for_review" | "needs_clarification" | "needs_review"
-  workflow: Workflow | null
-  worker_tier: "small" | "strong" | null
-  steps: string[]
-  evidence_refs: string[]
-  acceptance_criteria: string[]
-  permitted_tools: string[]
-  limits: Limits | null
+Recommendation {
+  status: "recommended" | "needs_clarification" | "needs_review"
+  task_type: "explain" | "fix" | "implement" | "clarify" | null
+  model: { tier: "small" | "strong", model_id: string } | null
+  budgets: Budgets | null
+  uncertainty: {
+    task_type_probability: number | null
+    task_type_confidence: number | null
+    needs_strong_model_probability: number | null
+    capability_uncertain: boolean | null
+    calibrated: false
+  }
   reason_codes: string[]
-  checks: string[]
   clarification_items: string[]
-  warnings: string[]
-  execution_enabled: false
 }
 
-Limits {
-  max_worker_calls: positive integer
-  max_worker_total_tokens: positive integer
-  max_context_tokens: positive integer
-  max_output_tokens: positive integer
+Budgets {
+  max_calls: positive integer
+  max_total_tokens: positive integer
+  max_input_tokens_per_call: positive integer
+  max_output_tokens_per_call: positive integer
 }
 ```
 
-| Status | Worker | Result |
+| Status | Model / budgets | Caller action |
 | --- | --- | --- |
-| `ready_for_review` | Small or strong tier | Proposed steps, tools, limits |
-| `needs_clarification` | None | Clarification items |
-| `needs_review` | None | Reason codes; empty execution steps |
+| `recommended` | Present | Decide whether to dispatch using this advice |
+| `needs_clarification` | Null | Resolve missing requirements |
+| `needs_review` | Null | Inspect uncertainty or invalid response |
+
+Probabilities range from 0 to 1. Null means unavailable. The middle capability region selects strong conservatively with `capability_uncertain: true`. These signals do not verify task correctness.
 
 ## Output schema: RoutingTrace
 
@@ -116,7 +124,7 @@ RoutingTrace {
   request_sent: boolean
   request: object              // exact Decisions request body
   response: any               // raw response; null when unavailable
-  plan: Plan
+  recommendation: Recommendation
   policy: RoutingPolicy
   elapsed_ms: number
   error: string | null
@@ -133,40 +141,43 @@ Live `response.usage` contains input/output/total tokens and cache/reasoning bre
 
 ## Policy options
 
-Configure with `RoutingPolicy(...)` in Python. No CLI policy-file option.
+Configure with `RoutingPolicy(...)` in Python. No CLI policy-file option. The API question named `workflow` supplies the output's `task_type`.
 
 | Field | Default / rule |
 | --- | --- |
-| `version` | `"initial-1"` |
-| `min_workflow_probability` | `0.75`; below → review |
-| `max_small_capability_probability` | `0.25`; at or below → small |
-| `min_strong_capability_probability` | `0.75`; at or above → strong |
+| `version` | `"routing-2"` |
+| `min_task_type_probability` | `0.75`; below → strong worker by default |
+| `uncertain_task_type_action` | `"strong"`; `"review"` restores the strict gate |
+| `max_small_probability` | `0.25`; at or below → small |
+| `min_strong_probability` | `0.75`; at or above → strong |
+| `small_model` | `"gpt-6-luna"` |
+| `strong_model` | `"gpt-6.1-sol"` |
 | Between capability thresholds | Strong, conservatively |
 | Choice `confidence` | Retained; does not drive thresholds |
-| `small_limits`, `strong_limits` | `Limits` instances; defaults below |
+| `small_budgets`, `strong_budgets` | `Budgets` instances; defaults below |
 
-| Tier | Calls | Total worker tokens | Context / call | Output / call |
+| Tier | Calls | Total caller tokens | Input / call | Output / call |
 | --- | ---: | ---: | ---: | ---: |
 | Small | 2 | 8,000 | 6,000 | 2,000 |
 | Strong | 4 | 24,000 | 12,000 | 4,000 |
 
-Thresholds are uncalibrated. Limits are proposed worker allowances; routing tokens are separate.
+Budgets are advisory, enforced by the caller, and exclude routing tokens. Model IDs are configurable; the calling session handles availability and dispatch.
 
 ## JSON Schema files
 
 Generated from current models and the installed SDK:
 
-[Task](docs/model-router/schemas/task.schema.json) · [Plan](docs/model-router/schemas/plan.schema.json) · [RoutingTrace](docs/model-router/schemas/routing-trace.schema.json) · [RoutingPolicy](docs/model-router/schemas/routing-policy.schema.json) · [Live Decisions response](docs/model-router/schemas/decision-response.schema.json)
+[Task](schemas/model_router/task.schema.json) · [Recommendation](schemas/model_router/recommendation.schema.json) · [Budgets](schemas/model_router/budgets.schema.json) · [Uncertainty](schemas/model_router/uncertainty.schema.json) · [RoutingTrace](schemas/model_router/routing-trace.schema.json) · [RoutingPolicy](schemas/model_router/routing-policy.schema.json) · [Live Decisions response](schemas/model_router/decision-response.schema.json)
 
-`RoutingTrace.response` is stored as `Any`; routing code validates answers. Status/workflow/tier are declared as strings in the models; their emitted values come from application rules.
+Regenerate: `uv run --no-editable python scripts/generate_model_router_schemas.py`. Add `--check` to detect drift. `RoutingTrace.response` preserves raw data; routing code validates the required answers.
 
 ## Exit codes
 
 | Code | Meaning |
 | --- | --- |
-| `0` | Request printed, plan ready, or clarification required |
+| `0` | Request printed, recommendation returned, or clarification required |
 | `1` | File, task, or replay validation error; message on stderr |
-| `2` | Plan needs review, or argparse rejected the command |
+| `2` | Routing needs review, or argparse rejected the command |
 
 ## Commands
 
@@ -178,3 +189,5 @@ uv run --no-editable ruff check .
 ```
 
 After source edits: `uv sync --no-editable --reinstall-package internal-tools`.
+
+Valid but uncertain workflow classifications now select the strong worker with an explicit reason code, including tentative `clarify` results. The worker should inspect context and resolve routine choices before asking the user. Confident clarification and caller-declared missing requirements still stop. Malformed responses, refusals, and transport failures remain review results; they are not silently converted to successful routing. Raw probabilities remain available and are uncalibrated.

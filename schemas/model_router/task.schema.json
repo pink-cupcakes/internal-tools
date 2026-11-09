@@ -1,0 +1,70 @@
+{
+  "$defs": {
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "ref": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Ref",
+          "type": "string"
+        },
+        "content": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Content",
+          "type": "string"
+        }
+      },
+      "required": [
+        "ref",
+        "content"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "request": {
+      "minLength": 1,
+      "pattern": "\\S",
+      "title": "Request",
+      "type": "string"
+    },
+    "evidence": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "title": "Evidence",
+      "type": "array"
+    },
+    "acceptance_criteria": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "pattern": "\\S",
+        "type": "string"
+      },
+      "title": "Acceptance Criteria",
+      "type": "array"
+    },
+    "missing_requirements": {
+      "default": [],
+      "items": {
+        "minLength": 1,
+        "pattern": "\\S",
+        "type": "string"
+      },
+      "title": "Missing Requirements",
+      "type": "array"
+    }
+  },
+  "required": [
+    "request"
+  ],
+  "title": "Task",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}
