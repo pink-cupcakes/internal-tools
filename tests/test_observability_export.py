@@ -1,90 +1,74 @@
 import json
 import unittest
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-from internal_tools.router_observability.exporter import (
-    ExportError,
-    _acknowledged,
-    _NoRedirect,
-    build_payload,
-    endpoint_url,
-    export_report,
-)
+from internal_tools.router_observability import export_report
 
 
 class ExportTests(unittest.TestCase):
-    report = {
-        "snapshot_id": "a" * 64,
-        "import_time_unix_nano": "123",
-        "timestamp_source": "snapshot_import_time",
-        "tasks": [],
-    }
+    report = {"snapshot_id": "snapshot", "tasks": [], "task_count": 0}
     environment = {"LANGFUSE_PUBLIC_KEY": "public", "LANGFUSE_SECRET_KEY": "secret"}
 
-    def test_stable_identity_and_import_timestamp(self):
-        self.assertEqual(build_payload(self.report), build_payload(dict(self.report)))
-        span = build_payload(self.report)["resourceSpans"][0]["scopeSpans"][0]["spans"][
-            0
-        ]
-        self.assertEqual(span["startTimeUnixNano"], span["endTimeUnixNano"])
-        changed = dict(self.report, snapshot_id="b" * 64)
-        self.assertNotEqual(
-            span["traceId"],
-            build_payload(changed)["resourceSpans"][0]["scopeSpans"][0]["spans"][0][
-                "traceId"
-            ],
+    def test_sdk_configuration_metadata_and_shutdown(self):
+        for base in (None, "https://langfuse.example"):
+            environment = dict(self.environment)
+            if base:
+                environment["LANGFUSE_BASE_URL"] = base
+            with patch("langfuse.Langfuse") as sdk:
+                export_report(self.report, environment=environment)
+                sdk.assert_called_once_with(
+                    public_key="public",
+                    secret_key="secret",
+                    base_url=base or "http://localhost:3000",
+                    timeout=10,
+                )
+                client = sdk.return_value
+                client.start_as_current_observation.assert_called_once_with(
+                    name="router.snapshot", as_type="span", metadata=self.report
+                )
+                client.shutdown.assert_called_once_with()
+
+    def test_shutdown_after_observation_failure(self):
+        with patch("langfuse.Langfuse") as sdk:
+            client = sdk.return_value
+            client.start_as_current_observation.side_effect = RuntimeError("failed")
+            with self.assertRaises(RuntimeError):
+                export_report(self.report, environment=self.environment)
+            client.shutdown.assert_called_once_with()
+
+    def test_missing_keys_fail_before_sdk_initialization(self):
+        with patch("langfuse.Langfuse") as sdk:
+            for environment in ({}, {"LANGFUSE_PUBLIC_KEY": "public"}):
+                with self.assertRaisesRegex(ValueError, "missing_credentials"):
+                    export_report(self.report, environment=environment)
+            sdk.assert_not_called()
+
+    def test_actual_sdk_with_in_memory_exporter(self):
+        from langfuse import Langfuse
+        from opentelemetry.sdk.trace.export.in_memory_span_exporter import (
+            InMemorySpanExporter,
         )
 
-    def test_endpoints_and_redirects(self):
-        for base in (
-            "http://localhost:3000",
-            "http://127.0.0.1",
-            "https://example.com",
+        exporter = InMemorySpanExporter()
+        actual_sdk = Langfuse
+        with (
+            patch.dict("os.environ", {}, clear=True),
+            patch("requests.sessions.Session.request", side_effect=AssertionError),
+            patch("httpx.Client.send", side_effect=AssertionError),
+            patch("langfuse.Langfuse") as sdk,
         ):
-            self.assertTrue(endpoint_url(base).endswith("/api/public/otel/v1/traces"))
-        for base in (
-            "http://example.com",
-            "https://u:p@example.com",
-            "https://example.com/path",
-            "https://example.com?secret=x",
-        ):
-            with self.assertRaises(ExportError):
-                endpoint_url(base)
-        with self.assertRaises(ExportError):
-            _NoRedirect().redirect_request(None, None, 302, None, None, "https://x")
-
-    def test_acknowledgements_and_partial_failure(self):
-        for ack in (
-            {},
-            {"partialSuccess": {}},
-            {
-                "name": "otel-ingestion-job",
-                "data": {"payload": {"authCheck": {"validKey": True}}},
-            },
-        ):
-            _acknowledged(json.dumps(ack).encode())
-        for ack in (
-            {"partialSuccess": {"rejectedSpans": 1}},
-            {"partialSuccess": {"errorMessage": "SECRET"}},
-            [],
-            {"name": "otel-ingestion-job", "data": None},
-        ):
-            with self.assertRaises(ExportError) as error:
-                _acknowledged(json.dumps(ack).encode())
-            self.assertNotIn("SECRET", str(error.exception))
-
-    def test_send_headers_timeout_and_sanitized_failure(self):
-        response = MagicMock(status=200)
-        response.read.return_value = b"{}"
-        opener = MagicMock()
-        opener.open.return_value.__enter__.return_value = response
-        with patch("urllib.request.build_opener", return_value=opener):
+            sdk.side_effect = lambda **kwargs: actual_sdk(
+                **dict(kwargs, public_key="pk-lf-memory"), span_exporter=exporter
+            )
             export_report(self.report, environment=self.environment)
-            request = opener.open.call_args.args[0]
-            self.assertEqual(request.get_header("X-langfuse-ingestion-version"), "4")
-            self.assertTrue(request.get_header("Authorization").startswith("Basic "))
-            self.assertTrue(request.full_url.startswith("http://localhost:3000/"))
-            self.assertEqual(opener.open.call_args.kwargs["timeout"], 10)
-            opener.open.side_effect = OSError("SECRET BODY")
-            with self.assertRaisesRegex(ExportError, "^transport_error$"):
-                export_report(self.report, environment=self.environment)
+        spans = exporter.get_finished_spans()
+        self.assertEqual(len(spans), 1)
+        self.assertEqual(spans[0].name, "router.snapshot")
+        self.assertEqual(
+            {
+                key.removeprefix("langfuse.observation.metadata."): json.loads(value)
+                for key, value in spans[0].attributes.items()
+                if key.startswith("langfuse.observation.metadata.")
+            },
+            self.report,
+        )

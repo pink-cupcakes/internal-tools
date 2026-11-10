@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import sys
 from pathlib import Path
 import tempfile
 import unittest
@@ -84,8 +85,9 @@ class SnapshotTests(unittest.TestCase):
     def test_cli_offline_never_reads_env_or_sends(self):
         with (
             tempfile.TemporaryDirectory() as directory,
-            patch("internal_tools.router_observability.cli.export_report") as send,
+            patch("internal_tools.router_observability.export_report") as send,
             patch("dotenv.dotenv_values") as environment,
+            patch.dict(sys.modules, {"langfuse": None}),
         ):
             with contextlib.redirect_stdout(io.StringIO()) as output:
                 self.assertEqual(
@@ -94,3 +96,39 @@ class SnapshotTests(unittest.TestCase):
             self.assertEqual(json.loads(output.getvalue())["tasks"], [])
             send.assert_not_called()
             environment.assert_not_called()
+
+    def test_cli_send_environment_precedence(self):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch("internal_tools.router_observability.export_report") as send,
+            patch(
+                "dotenv.dotenv_values",
+                return_value={
+                    "LANGFUSE_PUBLIC_KEY": "file",
+                    "LANGFUSE_SECRET_KEY": "secret",
+                },
+            ) as environment,
+            patch.dict("os.environ", {"LANGFUSE_PUBLIC_KEY": "existing"}, clear=True),
+            contextlib.redirect_stdout(io.StringIO()),
+        ):
+            self.assertEqual(
+                main(
+                    [
+                        "model-router-monitor",
+                        "--traces",
+                        directory,
+                        "--send",
+                        "--env-file",
+                        "fake.env",
+                    ]
+                ),
+                0,
+            )
+            environment.assert_called_once_with(Path("fake.env"))
+            self.assertEqual(
+                send.call_args.kwargs["environment"],
+                {
+                    "LANGFUSE_PUBLIC_KEY": "existing",
+                    "LANGFUSE_SECRET_KEY": "secret",
+                },
+            )

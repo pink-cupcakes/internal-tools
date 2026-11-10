@@ -4,7 +4,7 @@ import argparse
 from .model_router.cli import configure_parser, run_cli
 from .model_router.operations_cli import configure_operations
 from .linear_next.cli import configure_parser as configure_linear_next
-from .router_observability.cli import configure_parser as configure_monitor
+from .router_observability import configure_parser as configure_monitor
 
 
 def main(argv: list[str] | None = None) -> int:
