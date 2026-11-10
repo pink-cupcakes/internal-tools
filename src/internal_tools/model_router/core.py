@@ -14,6 +14,7 @@ from .models import (
     Uncertainty,
 )
 from .questions import ROUTING_INSTRUCTIONS, ROUTING_QUESTIONS
+from .telemetry import trace_live_route
 
 ROUTER_MODEL = "gpt-6-luna"
 ALLOWED_WORKFLOWS = ("explain", "fix", "implement", "clarify")
@@ -264,6 +265,7 @@ def _resolve_sender(
     return send_decision
 
 
+@trace_live_route
 def route(
     task: Task,
     *,
