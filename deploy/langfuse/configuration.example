@@ -1,0 +1,14 @@
+# Copy to .env; generate each secret separately: openssl rand -hex 32
+NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_SECRET=
+SALT=
+ENCRYPTION_KEY=
+POSTGRES_PASSWORD=
+REDIS_AUTH=
+MINIO_ROOT_USER=langfuse
+MINIO_ROOT_PASSWORD=
+# Hostname only, without protocol or port.
+CLICKHOUSE_HOST=
+CLICKHOUSE_DB=langfuse
+CLICKHOUSE_USER=
+CLICKHOUSE_PASSWORD=

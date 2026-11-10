@@ -1,0 +1,94 @@
+name: router-langfuse
+x-health: &health
+  interval: 5s
+  timeout: 5s
+  retries: 20
+  start_period: 10s
+x-app: &app
+  restart: unless-stopped
+  depends_on:
+    postgres: {condition: service_healthy}
+    redis: {condition: service_healthy}
+    minio: {condition: service_healthy}
+    bucket-init: {condition: service_completed_successfully}
+  environment:
+    NEXTAUTH_URL: ${NEXTAUTH_URL:?required}
+    NEXTAUTH_SECRET: ${NEXTAUTH_SECRET:?required}
+    SALT: ${SALT:?required}
+    ENCRYPTION_KEY: ${ENCRYPTION_KEY:?required}
+    DATABASE_URL: postgresql://langfuse:${POSTGRES_PASSWORD:?required}@postgres:5432/langfuse
+    CLICKHOUSE_USER: ${CLICKHOUSE_USER:?required}
+    CLICKHOUSE_PASSWORD: ${CLICKHOUSE_PASSWORD:?required}
+    CLICKHOUSE_DB: ${CLICKHOUSE_DB:?required}
+    CLICKHOUSE_URL: https://${CLICKHOUSE_HOST:?required}:8443
+    CLICKHOUSE_MIGRATION_URL: clickhouse://${CLICKHOUSE_HOST:?required}:9440
+    CLICKHOUSE_MIGRATION_SSL: "true"
+    CLICKHOUSE_CLUSTER_ENABLED: "false"
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
+    REDIS_AUTH: ${REDIS_AUTH:?required}
+    REDIS_TLS_ENABLED: "false"
+    TELEMETRY_ENABLED: "false"
+    TZ: UTC
+    LANGFUSE_S3_EVENT_UPLOAD_BUCKET: langfuse
+    LANGFUSE_S3_EVENT_UPLOAD_REGION: auto
+    LANGFUSE_S3_EVENT_UPLOAD_ACCESS_KEY_ID: ${MINIO_ROOT_USER:?required}
+    LANGFUSE_S3_EVENT_UPLOAD_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:?required}
+    LANGFUSE_S3_EVENT_UPLOAD_ENDPOINT: http://minio:9000
+    LANGFUSE_S3_EVENT_UPLOAD_FORCE_PATH_STYLE: "true"
+    LANGFUSE_S3_EVENT_UPLOAD_PREFIX: events/
+services:
+  web:
+    <<: *app
+    image: docker.langfuse.com/langfuse/langfuse:4.77.0@sha256:2b47d0ae63ae737996a58cc03536a73230c809a2371c230c9bea4b7653a0b6a0
+    ports: ["127.0.0.1:3000:3000"]
+  worker:
+    <<: *app
+    image: docker.langfuse.com/langfuse/langfuse-worker:4.77.0@sha256:1bc3597ff4c953e98ff9ee474a7d634e97664e4df298fdf20f13ecc834c89438
+  postgres:
+    image: docker.io/postgres:17.9@sha256:2a0d0fe14825b0939f78a8cad5cd4e6aa68bf94d0e5dd96e24b6d23af4315545
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: langfuse
+      POSTGRES_DB: langfuse
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?required}
+      TZ: UTC
+      PGTZ: UTC
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    healthcheck:
+      <<: *health
+      test: [CMD-SHELL, "pg_isready -U langfuse -d langfuse"]
+  redis:
+    image: docker.io/redis:7.4.8@sha256:3e0669e42d4fe421c9dea0ba5fbc04d336b80b4f32a6c7d25bee3a1d089288a1
+    restart: unless-stopped
+    environment:
+      REDIS_AUTH: ${REDIS_AUTH:?required}
+    command: [sh, -ec, 'exec redis-server --requirepass "$$REDIS_AUTH" --appendonly yes --maxmemory-policy noeviction']
+    volumes: [redis-data:/data]
+    healthcheck:
+      <<: *health
+      test: [CMD-SHELL, 'REDISCLI_AUTH="$$REDIS_AUTH" redis-cli ping | grep -q PONG']
+  minio:
+    image: &minio-image cgr.dev/chainguard/minio@sha256:616286de6ef3a1892876b126e745e152d8e03add6357203f8a1f854bdd1dce76
+    restart: unless-stopped
+    entrypoint: [sh, -ec]
+    command: ["exec minio server --address :9000 --console-address :9001 /data"]
+    environment: &minio-env
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?required}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?required}
+    volumes: [minio-data:/data]
+    healthcheck:
+      <<: *health
+      test: [CMD, mc, ready, local]
+  bucket-init:
+    image: *minio-image
+    restart: "no"
+    entrypoint: [sh, -ec]
+    command: ['mc alias set bootstrap http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" >/dev/null && mc mb --ignore-existing bootstrap/langfuse']
+    depends_on:
+      minio: {condition: service_healthy}
+    environment: *minio-env
+volumes:
+  postgres-data:
+  redis-data:
+  minio-data:
