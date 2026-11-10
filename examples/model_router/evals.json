@@ -1,0 +1,120 @@
+{
+  "version": "routing-labels-v1",
+  "data": [
+    {
+      "input": {
+        "request": "Explain what len([1, 2, 3]) returns in Python and why."
+      },
+      "expected_output": {
+        "status": "recommended",
+        "tier": "small"
+      },
+      "metadata": {
+        "id": "explanation",
+        "rationale": "A single familiar built-in with explicit input.",
+        "category": "explain"
+      }
+    },
+    {
+      "input": {
+        "request": "Fix this Python function so zero is accepted: def valid(n): return n > 0. Valid inputs are nonnegative integers. Change only the comparison."
+      },
+      "expected_output": {
+        "status": "recommended",
+        "tier": "small"
+      },
+      "metadata": {
+        "id": "one-line-fix",
+        "rationale": "Complete local behavior and a one-line change.",
+        "category": "fix"
+      }
+    },
+    {
+      "input": {
+        "request": "Change this JSON configuration from {\"timeout_seconds\": 10} to a 30-second timeout; preserve the key and JSON syntax."
+      },
+      "expected_output": {
+        "status": "recommended",
+        "tier": "small"
+      },
+      "metadata": {
+        "id": "config",
+        "rationale": "Exact key, value and format supplied.",
+        "category": "config"
+      }
+    },
+    {
+      "input": {
+        "request": "Rewrite this README sentence to correct the typo only: \"Run the comamnd to start.\""
+      },
+      "expected_output": {
+        "status": "recommended",
+        "tier": "small"
+      },
+      "metadata": {
+        "id": "docs",
+        "rationale": "A narrow spelling correction with supplied source.",
+        "category": "docs"
+      }
+    },
+    {
+      "input": {
+        "request": "Design a multi-region payment ledger replication protocol with linearizable balances during failover. Specify quorum behavior under network partitions, recovery and split-brain prevention; analyze failure cases."
+      },
+      "expected_output": {
+        "status": "recommended",
+        "tier": "strong"
+      },
+      "metadata": {
+        "id": "distributed",
+        "rationale": "Coupled distributed consistency and recovery reasoning.",
+        "category": "design"
+      }
+    },
+    {
+      "input": {
+        "request": "Design tenant isolation for a plugin execution service that accepts untrusted native code. Cover host escape threats, credential boundaries, side channels, network egress, key rotation and incident containment with explicit trust assumptions."
+      },
+      "expected_output": {
+        "status": "recommended",
+        "tier": "strong"
+      },
+      "metadata": {
+        "id": "security",
+        "rationale": "Security architecture with adversarial failure modes.",
+        "category": "security"
+      }
+    },
+    {
+      "input": {
+        "request": "Design a lock-free memory reclamation protocol for a concurrent C++ map with readers, removals and address reuse. Explain memory orderings, ABA avoidance, linearization points and a correctness argument under weak memory."
+      },
+      "expected_output": {
+        "status": "recommended",
+        "tier": "strong"
+      },
+      "metadata": {
+        "id": "concurrency",
+        "rationale": "Concurrency correctness spans memory ordering and lifetime.",
+        "category": "concurrency"
+      }
+    },
+    {
+      "input": {
+        "request": "Implement the integration.",
+        "missing_requirements": [
+          "Which service and integration behavior are required?"
+        ]
+      },
+      "expected_output": {
+        "status": "needs_clarification",
+        "tier": null
+      },
+      "metadata": {
+        "id": "clarification",
+        "rationale": "Destination service and intended behavior are explicitly missing.",
+        "category": "clarification"
+      }
+    }
+  ]
+}

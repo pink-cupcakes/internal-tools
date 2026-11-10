@@ -11,14 +11,14 @@ from internal_tools.model_router.core import DecisionCallError
 from internal_tools.model_router.models import Task
 
 ENV = {
-    "LANGFUSE_PUBLIC_KEY": "public",
-    "LANGFUSE_SECRET_KEY": "secret",
+    "LANGFUSE_PUBLIC_KEY": "auth-public",
+    "LANGFUSE_SECRET_KEY": "auth-secret",
     "LANGFUSE_TRACING_ENABLED": "true",
 }
 
 
 class AutomaticTracingTests(unittest.TestCase):
-    def test_two_live_calls_cover_execution_and_private_metadata(self):
+    def test_two_live_calls_capture_task_decision_and_private_metadata(self):
         with (
             patch.dict("os.environ", ENV, clear=True),
             patch("langfuse.Langfuse") as sdk,
@@ -51,14 +51,23 @@ class AutomaticTracingTests(unittest.TestCase):
                 )
             self.assertEqual(sender.call_count, 2)
             self.assertEqual(span.end.call_count, 2)
-            self.assertEqual(sdk.return_value.flush.call_count, 2)
-            sdk.return_value.shutdown.assert_not_called()
             self.assertEqual(sdk.call_args.kwargs["base_url"], "http://localhost:3000")
-            metadata = span.update.call_args.kwargs["metadata"]
+            update = span.update.call_args.kwargs
+            metadata = update["metadata"]
             self.assertEqual(metadata["routing_usage"]["total_tokens"], 4)
             self.assertEqual(metadata["routing_cache_usage"]["cached_input_tokens"], 2)
+            self.assertIn("PRIVATE REQUEST", json.dumps(update["input"]))
+            self.assertIn("PRIVATE EVIDENCE", json.dumps(update["input"]))
+            self.assertEqual(
+                update["usage_details"],
+                {"input": 1, "output": 1, "total": 4, "input_cached_tokens": 2},
+            )
+            self.assertEqual(update["model"], "gpt-6-luna")
+            self.assertIn("PRIVATE RESPONSE", json.dumps(update["output"]))
             self.assertNotIn("PRIVATE", json.dumps(metadata))
-            self.assertNotIn("clarification_items", metadata["recommendation"])
+            self.assertIn("clarification_items", update["output"]["recommendation"])
+            self.assertNotIn("auth-public", json.dumps(update))
+            self.assertNotIn("auth-secret", json.dumps(update))
 
     def _during_span(self, span, calls, response):
         self.assertEqual(span.end.call_count, calls - 1)
@@ -74,10 +83,16 @@ class AutomaticTracingTests(unittest.TestCase):
             )
             route(Task(request="private"), send=send)
             span = sdk.return_value.start_observation.return_value
-            self.assertNotIn("PRIVATE", json.dumps(span.update.call_args.kwargs))
+            failure_update = span.update.call_args.kwargs
+            self.assertIn("private", json.dumps(failure_update["input"]))
+            self.assertEqual(failure_update["level"], "ERROR")
+            self.assertEqual(failure_update["status_message"], "PRIVATE ERROR")
             result = route(Task(request="private", missing_requirements=["PRIVATE"]))
             self.assertEqual(result.source, "skipped")
             self.assertEqual(span.update.call_count, 2)
+            skipped = span.update.call_args.kwargs
+            self.assertEqual(skipped["model"], None)
+            self.assertIn("PRIVATE", json.dumps(skipped["output"]))
             self.assertEqual(send.call_count, 1)
 
     def test_offline_missing_keys_and_opt_out_never_initialize_sdk(self):

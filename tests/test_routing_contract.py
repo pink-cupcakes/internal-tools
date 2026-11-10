@@ -11,6 +11,35 @@ EXAMPLES = Path(__file__).resolve().parents[1] / "examples/model_router"
 
 
 class RoutingContractTests(unittest.TestCase):
+    def test_debug_fields_use_native_langfuse_generation_fields(self):
+        path = EXAMPLES.parents[1] / "src/internal_tools/model_router/telemetry.py"
+        calls = [
+            n
+            for n in ast.walk(ast.parse(path.read_text()))
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+        ]
+        updates = [
+            set(k.arg for k in n.keywords) for n in calls if n.func.attr == "update"
+        ]
+        self.assertTrue(
+            any(
+                {"input", "output", "model", "usage_details"} <= fields
+                for fields in updates
+            )
+        )
+        self.assertTrue(
+            any(
+                n.func.attr == "start_observation"
+                and any(
+                    k.arg == "as_type"
+                    and isinstance(k.value, ast.Constant)
+                    and k.value.value == "generation"
+                    for k in n.keywords
+                )
+                for n in calls
+            )
+        )
+
     def test_entrypoints_share_the_traced_route_without_monitor_code(self):
         source = EXAMPLES.parents[1] / "src/internal_tools"
         core = ast.parse((source / "model_router/core.py").read_text())

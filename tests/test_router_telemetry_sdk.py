@@ -40,7 +40,14 @@ class TraceFailureTests(unittest.TestCase):
                 route(Task(request="private"), send=sender)
             sender.assert_called_once()
             span = sdk.return_value.start_observation.return_value
-            span.update.assert_not_called()
+            self.assertEqual(
+                sdk.return_value.start_observation.call_args.kwargs["input"]["request"],
+                "private",
+            )
+            update = span.update.call_args.kwargs
+            self.assertEqual(update["status_message"], "RuntimeError")
+            self.assertEqual(update["level"], "ERROR")
+            self.assertNotIn("PRIVATE ERROR", json.dumps(update))
             span.end.assert_called_once()
 
     def test_real_sdk_repeated_calls_with_in_memory_exporter(self):
@@ -64,4 +71,9 @@ class TraceFailureTests(unittest.TestCase):
         spans = exporter.get_finished_spans()
         self.assertEqual(len(spans), 2)
         self.assertTrue(all(span.name == "model_router.route" for span in spans))
-        self.assertNotIn("PRIVATE", json.dumps([dict(s.attributes) for s in spans]))
+        for span in spans:
+            attrs = dict(span.attributes)
+            self.assertIn("PRIVATE", json.dumps(attrs))
+            self.assertEqual(attrs.get("langfuse.observation.model.name"), "gpt-6-luna")
+            self.assertIn("langfuse.observation.input", attrs)
+            self.assertIn("langfuse.observation.output", attrs)
