@@ -6,11 +6,15 @@ Python 3.11+. Independent public modules:
 | --- | --- | --- |
 | `internal_tools.model_router` | `internal-tools model-router` | Recommend models and budgets |
 | `internal_tools.linear_next` | `internal-tools linear-next` | Build a reviewed Linear queue grouped by project |
+| `internal_tools.router_observability` | `internal-tools model-router-monitor` | Audit routing outcomes and export metadata to Langfuse |
 
 The [Linear queue guide](docs/linear-next/README.md) covers collection, local data,
 the Python API, and the [offline demo](examples/linear_next/README.md).
 Each module owns its interface and performs no work on import. The router details
 below apply to `model_router`.
+
+The [router monitoring guide](docs/router-observability/README.md) covers the
+durable local ledger, usage and acceptance reports, and opt-in Langfuse export.
 
 ## Boundaries
 

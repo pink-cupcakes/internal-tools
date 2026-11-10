@@ -16,3 +16,6 @@ __pycache__/
 
 # Local Linear queue evidence and generated reports
 .linear-next/
+
+# Local routing telemetry ledger and exports
+.router-observability/
