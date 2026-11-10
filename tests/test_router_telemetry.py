@@ -4,6 +4,7 @@ import io
 import json
 import unittest
 from unittest.mock import Mock, patch
+from pathlib import Path
 
 from internal_tools.cli import main
 from internal_tools.model_router import route
@@ -52,22 +53,26 @@ class AutomaticTracingTests(unittest.TestCase):
             self.assertEqual(sender.call_count, 2)
             self.assertEqual(span.end.call_count, 2)
             self.assertEqual(sdk.call_args.kwargs["base_url"], "http://localhost:3000")
-            update = span.update.call_args.kwargs
-            metadata = update["metadata"]
-            self.assertEqual(metadata["routing_usage"]["total_tokens"], 4)
-            self.assertEqual(metadata["routing_cache_usage"]["cached_input_tokens"], 2)
-            self.assertIn("PRIVATE REQUEST", json.dumps(update["input"]))
-            self.assertIn("PRIVATE EVIDENCE", json.dumps(update["input"]))
-            self.assertEqual(
-                update["usage_details"],
-                {"input": 1, "output": 1, "total": 4, "input_cached_tokens": 2},
-            )
-            self.assertEqual(update["model"], "gpt-6-luna")
-            self.assertIn("PRIVATE RESPONSE", json.dumps(update["output"]))
-            self.assertNotIn("PRIVATE", json.dumps(metadata))
-            self.assertIn("clarification_items", update["output"]["recommendation"])
-            self.assertNotIn("auth-public", json.dumps(update))
-            self.assertNotIn("auth-secret", json.dumps(update))
+            self._assert_private_update(span.update.call_args.kwargs)
+
+    def _assert_private_update(self, update):
+        metadata = update["metadata"]
+        self.assertEqual(metadata["routing_usage"]["total_tokens"], 4)
+        self.assertEqual(metadata["routing_cache_usage"]["cached_input_tokens"], 2)
+        self.assertIn("PRIVATE REQUEST", json.dumps(update["input"]))
+        self.assertIn("PRIVATE EVIDENCE", json.dumps(update["input"]))
+        self.assertEqual(
+            update["usage_details"],
+            {"input": 1, "output": 1, "total": 4, "input_cached_tokens": 2},
+        )
+        self.assertEqual(update["model"], "gpt-6-luna")
+        self.assertIn("PRIVATE RESPONSE", json.dumps(metadata["provider_response"]))
+        self.assertIn("PRIVATE REQUEST", json.dumps(metadata["provider_request"]))
+        self.assertIn("uncertainty", metadata["recommendation"])
+        self.assertNotIn("PRIVATE", json.dumps(update["output"]))
+        self.assertNotIn("clarification_items", update["output"])
+        self.assertNotIn("auth-public", json.dumps(update))
+        self.assertNotIn("auth-secret", json.dumps(update))
 
     def _during_span(self, span, calls, response):
         self.assertEqual(span.end.call_count, calls - 1)
@@ -144,3 +149,56 @@ class AutomaticTracingTests(unittest.TestCase):
         self.assertIn("source", inspect.signature(route).parameters)
         with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
             main(["model-router-monitor"])
+
+
+class SelectionOutputTests(unittest.TestCase):
+    def test_small_strong_and_stopped_outputs_are_concise(self):
+        response_path = (
+            Path(__file__).resolve().parents[1]
+            / "examples/model_router/parser_bug.response.simulated.json"
+        )
+        for probability, expected in ((0.08, "gpt-6-luna"), (0.9, "gpt-6.1-sol")):
+            response = json.loads(response_path.read_text())
+            response["answers"][1]["probability"] = probability
+            with (
+                self.subTest(expected=expected),
+                patch.dict("os.environ", ENV, clear=True),
+                patch("langfuse.Langfuse") as sdk,
+            ):
+                task = Task(request="Fix it", evidence=[{"ref": "a", "content": "b"}])
+                trace = route(task, send=lambda _: response)
+                update = sdk.return_value.start_observation.return_value.update
+                fields = update.call_args.kwargs
+                output = fields["output"]
+                self.assertEqual(next(iter(output)), "selected_model")
+                self.assertEqual(output["selected_model"], expected)
+                self.assertEqual(output["tier"], trace.recommendation.model.tier)
+                self.assertEqual(output["workflow"], "fix")
+                self.assertEqual(output["status"], "recommended")
+                self.assertEqual(
+                    set(output),
+                    {"selected_model", "tier", "workflow", "status", "reason"},
+                )
+                self.assertNotIn("_", output["reason"])
+                self.assertEqual(fields["input"], task.model_dump())
+                self.assertEqual(fields["model"], "gpt-6-luna")
+                self.assertEqual(fields["metadata"]["provider_response"], response)
+
+    def test_stopped_output_has_no_model_and_explicit_clarification(self):
+        with (
+            patch.dict("os.environ", ENV, clear=True),
+            patch("langfuse.Langfuse") as sdk,
+        ):
+            route(Task(request="Fix it", missing_requirements=["Which file?"]))
+            update = sdk.return_value.start_observation.return_value.update
+            self.assertEqual(
+                update.call_args.kwargs["output"],
+                {
+                    "selected_model": None,
+                    "tier": None,
+                    "workflow": "clarify",
+                    "status": "needs_clarification",
+                    "reason": "Missing requirements need clarification.",
+                    "clarification_items": ["Which file?"],
+                },
+            )
