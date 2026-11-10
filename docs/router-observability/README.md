@@ -50,7 +50,8 @@ uv run --no-editable internal-tools model-router-monitor \
 This sends **all pending snapshots in that ledger**, including historical snapshots,
 oldest first. Delivery stops on the first failure. Rerun the same command to retry;
 no automatic retries or background sending occur. Full HTTP 200 acknowledgement
-is required; rejected spans, error messages, invalid JSON, HTTP failures and timeouts
+is required, accepting standard OTLP responses or a validated Langfuse v4
+ingestion queue acknowledgement; rejected spans, error messages, invalid JSON, HTTP failures and timeouts
 leave the snapshot pending. The request timeout is 10 seconds, capped at 30 seconds
 in the Python transport API. Avoid concurrent senders sharing the same ledger.
 Acknowledgement is local to the ledger, so use separate ledgers for separate targets.

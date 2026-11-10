@@ -73,20 +73,105 @@ def _request(payload: dict, environment: dict) -> urllib.request.Request:
 def _acknowledged(raw: bytes) -> None:
     try:
         response = json.loads(raw)
-        if not isinstance(response, dict) or set(response) - {"partialSuccess"}:
+        if not isinstance(response, dict):
             raise ValueError
-        partial = response.get("partialSuccess", {})
-        if not isinstance(partial, dict):
-            raise ValueError
-        rejected = partial.get("rejectedSpans", 0)
-        if not isinstance(rejected, (str, int)) or str(rejected) != "0":
-            raise ExportError("partial_success")
-        if partial.get("errorMessage"):
-            raise ExportError("partial_success")
+        if response == {}:
+            return
+        if set(response) == {"partialSuccess"}:
+            _partial_success(response["partialSuccess"])
+            return
+        if _queue_job_ack(response):
+            return
+        raise ValueError
     except ExportError:
         raise
     except (ValueError, TypeError, UnicodeError):
         raise ExportError("invalid_acknowledgement") from None
+
+
+def _partial_success(partial: object) -> None:
+    if not isinstance(partial, dict) or set(partial) - {
+        "rejectedSpans", "errorMessage"
+    }:
+        raise ValueError
+    rejected = partial.get("rejectedSpans", 0)
+    if not isinstance(rejected, (str, int)) or str(rejected) != "0":
+        raise ExportError("partial_success")
+    if partial.get("errorMessage"):
+        raise ExportError("partial_success")
+
+
+def _queue_job_ack(response: dict) -> bool:
+    """Recognize the successful Langfuse v4 BullMQ enqueue response only."""
+    envelope = {
+        "name", "data", "opts", "id", "progress", "returnvalue", "stacktrace",
+        "priority", "attemptsStarted", "attemptsMade", "stalledCounter",
+        "timestamp", "queueQualifiedName",
+    }
+    if set(response) != envelope or not _valid_job_status(response):
+        return False
+    data = response["data"]
+    if not isinstance(data, dict) or set(data) != {
+        "id", "timestamp", "name", "payload"
+    }:
+        return False
+    payload = data["payload"]
+    if not isinstance(payload, dict) or not _valid_payload(payload):
+        return False
+    return (
+        isinstance(data["id"], str)
+        and isinstance(data["timestamp"], (str, int, float))
+        and data["name"] == "otel-ingestion-job"
+    )
+
+
+def _valid_payload(payload: dict) -> bool:
+    expected = {"data", "authCheck", "sdkName", "sdkVersion", "ingestionVersion"}
+    if set(payload) != expected or payload["ingestionVersion"] != "4":
+        return False
+    if not isinstance(payload["sdkName"], str) or not isinstance(
+        payload["sdkVersion"], str
+    ):
+        return False
+    source = payload["data"]
+    if not isinstance(source, dict) or set(source) != {"fileKey", "publicKey"}:
+        return False
+    if not all(isinstance(value, str) and value for value in source.values()):
+        return False
+    auth = payload["authCheck"]
+    if not isinstance(auth, dict) or set(auth) != {"validKey", "scope"}:
+        return False
+    scope = auth["scope"]
+    return (
+        auth["validKey"] is True
+        and isinstance(scope, dict)
+        and set(scope) == {"projectId", "accessLevel", "orgId"}
+        and scope["accessLevel"] == "project"
+        and all(isinstance(value, str) and value for value in scope.values())
+    )
+
+
+def _valid_job_status(response: dict) -> bool:
+    if not isinstance(response["opts"], dict) or response["stacktrace"] is not None:
+        return False
+    if not isinstance(response["progress"], (dict, int, float)):
+        return False
+    if response["returnvalue"] is not None and not isinstance(
+        response["returnvalue"], dict
+    ):
+        return False
+    counters = (
+        response["priority"], response["attemptsStarted"],
+        response["attemptsMade"], response["stalledCounter"],
+    )
+    return (
+        all(type(value) is int and value >= 0 for value in counters)
+        and isinstance(response["id"], (str, int))
+        and isinstance(response["name"], str)
+        and response["name"] == "otel-ingestion-job"
+        and isinstance(response["queueQualifiedName"], str)
+        and isinstance(response["timestamp"], (int, float))
+    )
 
 
 def export_report(

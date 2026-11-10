@@ -33,6 +33,42 @@ REPORT = {
 }
 
 
+def _synthetic_queue_ack():
+    return {
+        "name": "otel-ingestion-job",
+        "data": {
+            "id": "synthetic-event-id",
+            "timestamp": 1730000000000,
+            "name": "otel-ingestion-job",
+            "payload": {
+                "data": {"fileKey": "synthetic-file-key", "publicKey": "pk_test"},
+                "authCheck": {
+                    "validKey": True,
+                    "scope": {
+                        "projectId": "synthetic-project",
+                        "accessLevel": "project",
+                        "orgId": "synthetic-org",
+                    },
+                },
+                "sdkName": "unknown",
+                "sdkVersion": "3.0.0",
+                "ingestionVersion": "4",
+            },
+        },
+        "opts": {},
+        "id": "synthetic-job-id",
+        "progress": 0,
+        "returnvalue": None,
+        "stacktrace": None,
+        "priority": 0,
+        "attemptsStarted": 0,
+        "attemptsMade": 0,
+        "stalledCounter": 0,
+        "timestamp": 1730000000000,
+        "queueQualifiedName": "bull:otel-traces",
+    }
+
+
 class ExportTests(unittest.TestCase):
     def test_stability_privacy_and_separate_sessions(self):
         report = json.loads(json.dumps(REPORT))
@@ -95,6 +131,29 @@ class ExportTests(unittest.TestCase):
             factory.return_value.open.side_effect = TimeoutError("secret")
             with self.assertRaisesRegex(ExportError, "transport_error"):
                 export_report(REPORT, "s", environment=ENV)
+
+    def test_langfuse_v4_queue_job_acknowledgement(self):
+        job = _synthetic_queue_ack()
+        for mutation in (
+            lambda value: value["data"]["payload"]["authCheck"].update(
+                validKey=False
+            ),
+            lambda value: value["data"]["payload"].update(unexpected="field"),
+            lambda value: value.update(unexpected="field"),
+        ):
+            invalid = json.loads(json.dumps(job))
+            mutation(invalid)
+            with self.subTest(ack=invalid), self.assertRaisesRegex(
+                ExportError, "invalid_acknowledgement"
+            ):
+                from internal_tools.router_observability.exporter import _acknowledged
+
+                _acknowledged(json.dumps(invalid).encode())
+        from internal_tools.router_observability.exporter import _acknowledged
+
+        _acknowledged(json.dumps(job).encode())
+        _acknowledged(b"{}")
+        _acknowledged(b'{"partialSuccess":{}}')
 
     def test_offline_and_failed_delivery_preserve_ledger(self):
         with tempfile.TemporaryDirectory() as directory:
