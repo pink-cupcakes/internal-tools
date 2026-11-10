@@ -15,6 +15,8 @@ below apply to `model_router`.
 
 The [router monitoring guide](docs/router-observability/README.md) covers the
 durable local ledger, usage and acceptance reports, and opt-in Langfuse export.
+The [Langfuse deployment guide](deploy/langfuse/README.md) uses external
+ClickHouse Cloud for trace storage so existing ClickHouse credits can be used.
 
 ## Boundaries
 
