@@ -8,6 +8,7 @@ version = "0.1.0"
 description = "Independent internal tools for model routing and Linear work planning."
 requires-python = ">=3.11"
 dependencies = [
+    "langfuse>=5.2,<6",
     "openai>=3.46.0",
     "pydantic>=2,<3",
     "python-dotenv>=1.2.4",
