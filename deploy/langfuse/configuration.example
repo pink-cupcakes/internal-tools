@@ -1,15 +1,13 @@
-# Copy to .env (ignored); chmod 600. Empty required values intentionally fail.
+# Copy to .env; generate each secret separately: openssl rand -hex 32
 NEXTAUTH_URL=http://localhost:3000
-S3_PUBLIC_ENDPOINT=http://localhost:9090
-# Generate each separately: openssl rand -hex 32
 NEXTAUTH_SECRET=
 SALT=
 ENCRYPTION_KEY=
 POSTGRES_PASSWORD=
 REDIS_AUTH=
-MINIO_ROOT_USER=
+MINIO_ROOT_USER=langfuse
 MINIO_ROOT_PASSWORD=
-# Hostname only, e.g. identifier.region.aws.clickhouse.cloud
+# Hostname only, without protocol or port.
 CLICKHOUSE_HOST=
 CLICKHOUSE_DB=langfuse
 CLICKHOUSE_USER=
