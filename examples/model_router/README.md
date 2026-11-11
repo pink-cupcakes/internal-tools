@@ -47,3 +47,17 @@ Uses the saved task and response. Optional `--task FILE` enforces an exact reque
 | `parser_bug/` | Intentionally broken parser; two empty-input errors expected |
 
 The live trace is local and ignored by Git. The router returns resource advice; the fixture remains unchanged.
+
+## Routing-label experiments
+
+```sh
+uv run --no-editable python examples/model_router/evals.py --out /tmp/router-evals.json
+uv run --no-editable python examples/model_router/evals.py --baseline /tmp/router-evals.json
+```
+
+Uses `.env` credentials to compare current, always-strong and eval-only candidate
+policies on eight versioned cases; publishes native Langfuse Experiments.
+One paid router call per actionable case; comparisons reuse its response.
+Scores: label match, over-escalation and missed escalation (all-case denominators).
+Baseline comparison requires identical cases. Labels are hypotheses, not worker
+quality or savings measurements. Production defaults stay unchanged.
